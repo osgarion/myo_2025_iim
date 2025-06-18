@@ -1,0 +1,73 @@
+# Libraries & functions ----
+## libraries ----
+pacman::p_load(update = T,  
+               equatiomatic, beepr, tictoc, 
+               tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
+               gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
+               kableExtra
+)
+## function specification ----
+conflicted::conflicts_prefer(
+  janitor::remove_empty,
+  dplyr::filter,
+  dplyr::mutate,
+  dplyr::rename,
+  dplyr::summarize,
+  dplyr::summarise,
+  dplyr::select,
+  purrr::map,
+  tidyr::extract,
+  janitor::clean_names,
+  dplyr::relocate
+)
+
+## Conflicted functions ----
+ls_conflicted_01 <- conflicted::conflict_scout()
+
+# Options ----
+## Furrr
+furrr_options(seed = TRUE,
+              scheduling = Inf)
+options(knitr.kable.NA = '') # empty space in cells with NAs in kable
+
+## Markdown ----
+options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
+        scipen = 999)            # non-academic format of numbers
+
+## Possibly ----
+
+
+## Number of cores ----
+ncores <- availableCores() -1
+
+## Okabe & Ito palette - colorblind palette ----
+pal_okabe_ito <- colorblind_pal()(8)[2:8] # ggthemes
+
+# Figures ----
+## Group description
+# group_colors <- c(C = "#1b9e77", SE = "#d95f02")
+# group_fills  <- c(C = "#a6dba0", SE = "#fc8d62")  
+# group_shapes <- c(C = 21, SE = 22)               
+# group_names  <- c(C = "Control", SE = "Status Epilepticus")
+
+
+
+# any ggplot
+median_cl_boot <- function(x, conf = 0.95) {
+  lconf <- (1 - conf)/2
+  uconf <- 1 - lconf
+  require(boot)
+  bmedian <- function(x, ind) median(x[ind])
+  bt <- boot(x, bmedian, 50000)
+  bb <- boot.ci(bt, type = "perc")
+  data.frame(y = median(x), ymin = quantile(bt$t, lconf), ymax = quantile(bt$t, 
+                                                                          uconf))
+}
+
+# GGally
+my_fn <- function(data, mapping, method="loess", ...){
+  p <- ggplot(data = data, mapping = mapping) + 
+    geom_point(alpha=0.3) + 
+    geom_smooth(method=method, ...)
+  p
+}
