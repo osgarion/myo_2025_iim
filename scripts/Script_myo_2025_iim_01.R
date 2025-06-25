@@ -46,23 +46,12 @@ pacman::p_load(
 pacman::p_load(naniar, MVN) 
 
 # Functions and libraries uploading
-list.files("scripts/functions/", pattern="*.*", full.names=TRUE) %>% map(~source(.))
+list.files("scripts/functions/", pattern="*.*", full.names=TRUE) |> map(~source(.))
 
 # Back-up
 back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_01.R") # the the destination subdirectory specify using 'path_dest'
-
-# Options ----
-furrr_options(seed = TRUE,
-              scheduling = Inf)
-options(knitr.kable.NA = '') # empty space in cells with NAs in kable
-## without scientific format
-options(scipen=999)
-
-# Okabe & Ito palette - colorblind palette
-pal_okabe_ito <- colorblind_pal()(8)[2:8] # ggthemes
-
 
 # Markdown ----
 options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
@@ -83,35 +72,31 @@ cgwtools::resave(list=ls(pattern="tbl"), file = "reports/markD_01.RData")
 
 # EDA ----
 ## Duplicates ----
-eval_dup_01 <- d01 %>% get_dupes(!starts_with("p_")) %>% capture_messages()
+eval_dup_01 <- d03 |> get_dupes()  |>  capture_messages()
 
 ## Missing values ----
-vis_miss()
-gg_miss_var()
-gg_miss_var( ,facet=)
-gg_miss_case()
-gg_miss_case( ,facet = )
-(miss_tab01 <- miss_var_summary())
-(miss_tab02 <- miss_case_summary())
+vis_miss(d03)
+gg_miss_var(d03)
+gg_miss_var(d03 ,facet=poradie_vysetrenia)
+gg_miss_case(d03)
+gg_miss_case(d03 ,facet = poradie_vysetrenia)
+(miss_tab01 <- miss_var_summary(d03))
+(miss_tab02 <- miss_case_summary(d03))
 
-gg_miss_upset(d21) # give an overall pattern of missingness
-gg_miss_fct(x = df, fct = group)
+gg_miss_upset(d03) # give an overall pattern of missingness
+gg_miss_fct(x = d03, fct = poradie_vysetrenia)
 
-## Multivariate analysis ----
-res_mvn <- mvn(data = d01, mvnTest = "mardia")
-# create univariate Q-Q plots
-mvn_qq <- mvn(data = d01, mvnTest = "mardia", univariatePlot = "qqplot")
-# create univariate histograms
-mvn_hist <- mvn(data = d01, mvnTest = "mardia", univariatePlot = "histogram")
+## overview ----
+d03 |>
+  select(-projekt_id) |> 
+  my_skim()
 
-
-## TRAFO package ----
-fmla <- y ~ x
-lin_mod <- df %>%  lm(fmla,.)
-assumptions(lin_mod)
-lin_Mod_trafo <- trafo_lm(lin_mod)
-diagnostics(lin_Mod_trafo)
-
+## correlation ----
+### ggally ----
+ggpairs(d03,
+        columns = d03 |> select(where(is.numeric)) |> names(), 
+        lower = list(continuous = my_fn)) +
+  theme_sjplot2()
 
 # Statistics ----
 

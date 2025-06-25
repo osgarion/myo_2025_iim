@@ -4,7 +4,7 @@ pacman::p_load(update = T,
                equatiomatic, beepr, tictoc, 
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
-               kableExtra
+               kableExtra, skimr, GGally
 )
 ## function specification ----
 conflicted::conflicts_prefer(
@@ -71,3 +71,14 @@ my_fn <- function(data, mapping, method="loess", ...){
     geom_smooth(method=method, ...)
   p
 }
+
+# tables ----
+## column with 0, 1, and NA ----
+is_01_col <- function(x) {
+  all(unique(x) %in% c(0, 1, NA))
+}
+
+## skimr ----
+my_skim <- skimr::skim_with(numeric = sfl(median = ~ median(., na.rm = TRUE),
+                                          mad = ~ mad(., na.rm = TRUE)), 
+                            append = T)
