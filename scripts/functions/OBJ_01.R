@@ -1,4 +1,14 @@
+# variables ----
+var_indep_01 <- c("mstn", "fst", "fst", "fstl3", "akta")
+var_dep_01 <- c("mmt8_total", "mmt10_total", "fi_2", "borg10", "haq", 
+                "sf36_mcs", "crp", "ast", "alt", "ck", "ld", 
+                "kreatinin_umol_l", "mitax", "myoact", "physician_activity_vas", 
+                "muscle_disease_activity", "odpoved_na_terapii_m0_vs_m6")
+var_dep_02 <- c("mmt8_total", "mmt10_total", "fi_2")
+
+
 # data ----
+## importing ----
 folder_path <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Data/"
 
 path_myo_01 <- file_to_load(phrase = "Myokiny", 
@@ -65,7 +75,7 @@ d02_clinics <- import(path_clin_01) |>
   fill(kurak_nejmene_100_cigaret)
 
 
-# merging
+## merging ----
 d03 <- d02_clinics |> 
   full_join(d01_myokiny |> 
               select(-maju_klinicke_data_pre_odfiltrovanie),
@@ -73,5 +83,79 @@ d03 <- d02_clinics |>
                    "poradie_vysetrenia",
                    "bbm_id",
                    "pohlavi")) |> 
+  group_by(projekt_id) |> 
+  fill(podtyp_nemoci) |> 
+  fill(odpoved_na_terapii_m0_vs_m6, .direction = "downup") |> 
   ungroup()
+
+# selection ----
+d04_sel1 <- d03 |> 
+  select(projekt_id, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |> 
+  filter(poradie_vysetrenia %in% c("M0", "M3", "M6", "M18"))
+
+d04_sel1_nested <- d04_sel1 |> 
+  # mutate(poradie_vysetrenia = str_remove(poradie_vysetrenia, "M") |> as.numeric()) |>
+  dplyr::select(-odpoved_na_terapii_m0_vs_m6) |> 
+  pivot_longer(cols = any_of(var_dep_01),
+               names_to = "var_dep_name",
+               values_to = "var_dep_value") |> 
+  pivot_longer(cols = any_of(var_indep_01),
+               names_to = "var_indep_name",
+               values_to = "var_indep_value") |> 
+  group_by(var_dep_name, var_indep_name) |> 
+  nest()
+
+## PCA, heatmap ----
+# m0
+data_m0 <- d03 |> 
+  filter(poradie_vysetrenia == "M0") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::mice(method = "pmm", m = 5, printFlag = FALSE) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m0 <- d03 |> 
+  filter(poradie_vysetrenia == "M0") |> 
+  pull(podtyp_nemoci)
+# m3
+data_m3 <- d03 |> 
+  filter(poradie_vysetrenia == "M3") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::mice(method = "pmm", m = 5, printFlag = FALSE) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m3 <- d03 |> 
+  filter(poradie_vysetrenia == "M3") |> 
+  pull(podtyp_nemoci)
+# m6
+data_m6 <- d03 |> 
+  filter(poradie_vysetrenia == "M6") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::mice(method = "pmm", m = 5, printFlag = FALSE) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m6 <- d03 |> 
+  filter(poradie_vysetrenia == "M6") |> 
+  pull(podtyp_nemoci)
+# m18
+data_m18 <- d03 |> 
+  filter(poradie_vysetrenia == "M18") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::mice(method = "pmm", m = 5, printFlag = FALSE) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m18 <- d03 |> 
+  filter(poradie_vysetrenia == "M18") |> 
+  pull(podtyp_nemoci)
+
+
+
+
+
+
+
+
   

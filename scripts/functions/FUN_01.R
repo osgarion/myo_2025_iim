@@ -4,8 +4,12 @@ pacman::p_load(update = T,
                equatiomatic, beepr, tictoc, 
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
-               kableExtra, skimr, GGally
+               kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot
 )
+
+# Missing values, multivariate analyses
+pacman::p_load(naniar, MVN) 
+
 ## function specification ----
 conflicted::conflicts_prefer(
   janitor::remove_empty,
@@ -18,7 +22,8 @@ conflicted::conflicts_prefer(
   purrr::map,
   tidyr::extract,
   janitor::clean_names,
-  dplyr::relocate
+  dplyr::relocate,
+  lmerTest::lmer
 )
 
 ## Conflicted functions ----
@@ -35,6 +40,7 @@ options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
         scipen = 999)            # non-academic format of numbers
 
 ## Possibly ----
+possLMER <- possibly(.f=lmer, otherwise = NA_real_)
 
 
 ## Number of cores ----
@@ -71,6 +77,48 @@ my_fn <- function(data, mapping, method="loess", ...){
     geom_smooth(method=method, ...)
   p
 }
+
+
+# UMAP
+kabsch <- function(pm, qm) {
+  pm_dims <- dim(pm)
+  if (!all(dim(qm) == pm_dims)) {
+    stop(call. = TRUE, "Point sets must have the same dimensions")
+  }
+  # The rotation matrix will have (ncol - 1) leading ones in the diagonal
+  diag_ones <- rep(1, pm_dims[2] - 1)
+  
+  # center the points
+  pm <- scale(pm, center = TRUE, scale = FALSE)
+  qm <- scale(qm, center = TRUE, scale = FALSE)
+  
+  am <- crossprod(pm, qm)
+  
+  svd_res <- svd(am)
+  # use the sign of the determinant to ensure a right-hand coordinate system
+  d <- determinant(tcrossprod(svd_res$v, svd_res$u))$sign
+  dm <- diag(c(diag_ones, d))
+  
+  # rotation matrix
+  um <- svd_res$v %*% tcrossprod(dm, svd_res$u)
+  
+  # Rotate and then translate to the original centroid location of qm
+  sweep(t(tcrossprod(um, pm)), 2, -attr(qm, "scaled:center"))
+}
+
+plot_umap <- function(coords, col, pca, main = NULL) {
+  plot(kabsch(coords, pca), col = col, xlab = "", ylab = "", 
+       main = main)
+  legend("topright", legend = unique(col))
+  }
+
+
+
+
+
+
+
+
 
 # tables ----
 ## column with 0, 1, and NA ----
