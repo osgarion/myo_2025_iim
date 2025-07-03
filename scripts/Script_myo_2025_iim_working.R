@@ -1,11 +1,13 @@
+possmixMODmmt <- possibly(mod_mixMODmmt, otherwise = NULL)
+
 res_mixMod_mmt <- d04_sel1_nested |> 
   filter(str_detect(var_dep_name, "mmt")) |> 
-  mutate(mod_80 = map(data, ~mod_mixMODmmt(.x, upper = 80)),
+  mutate(mod_80 = map(data, ~possmixMODmmt(.x, upper = 80)),
          tidier_80 = map(mod_80, tidy),
-         fig_80 = pmap(list(data, mod_80, var_indep_name, var_dep_name, , upper = 80),fig_mixMODmmt),
-         mod_100 = map(data, ~mod_mixMODmmt(.x, upper = 100)),
+         fig_80 = pmap(list(data, mod_80, var_indep_name, var_dep_name, upper = 80),fig_mixMODmmt),
+         mod_100 = map(data, ~possmixMODmmt(.x, upper = 100)),
          tidier_100 = map(mod_100, tidy),
-         fig_100 = pmap(list(data, mod_100, var_indep_name, var_dep_name, , upper = 100),fig_mixMODmmt)
+         fig_100 = pmap(list(data, mod_100, var_indep_name, var_dep_name, upper = 100),fig_mixMODmmt)
          )
 
 
@@ -13,44 +15,87 @@ res_mixMod_mmt <- d04_sel1_nested |>
 walk(res_mixMod_mmt$fig_100, print)
 
 
-
-
+# 
+# 
+# mod_mixMODmmt(d04_sel1_nested$data[[5]], 100)
+# 
+# data <- d04_sel1_nested$data[[5]]
+# 
+# 
+# mod_mixMODmmt(d04_sel1_nested$data[[1]], 80)
+# 
+# 
+# 
+# data <- d04_sel1_nested$data[[5]]
+# upper = 100
 
 
 
 mod_mixMODmmt <- function(data, upper) {
-  data <- data_test
-  
   data_set <- data |> 
-    mutate(var_indep_value_scl = log(var_indep_value),
-           y_capped =  pmin(data_test$var_dep_value, upper),
-           ind = as.integer(data_test$var_dep_value >= upper)
+    mutate(
+      var_indep_value_scl = log(var_indep_value),
+      y_capped = pmin(var_dep_value, upper),
+      ind = as.integer(var_dep_value >= upper)
     )
   
   fm <- mixed_model(
     fixed  = cbind(y_capped, ind) ~ poradie_vysetrenia + var_indep_value_scl,
     random = ~ 1 | projekt_id,
     family = censored.normal(),
-    data   = data_test
+    data   = data_set
   )
   return(fm)
 }
 
 
-fig_mixMODmmt <- function(data, mod, var_indep_name, var_dep_name) {
+
+# fig_mixMODmmt <- function(data, mod, var_indep_name, var_dep_name, upper) {
+#   data_set <- data |> 
+#     mutate(
+#       var_indep_value_scl = log(var_indep_value),
+#       y_capped = pmin(var_dep_value, upper),
+#       ind = as.integer(var_dep_value >= upper)
+#     )
+#   
+#   pred_df <- GLMMadaptive::effectPlotData(mod, newdata = na.omit(data_set))
+#   
+#   fig <- ggplot(pred_df, aes(x = var_indep_value, y = var_dep_value)) +
+#     geom_point(aes(color = poradie_vysetrenia), alpha = 0.6, show.legend = FALSE) +
+#     geom_line(aes(y = pred, color = poradie_vysetrenia), size = 1, show.legend = FALSE) +
+#     geom_ribbon(aes(ymax = upp, ymin = low, fill = poradie_vysetrenia), 
+#                 alpha = 0.3, linetype = 0) +
+#     facet_wrap(~ poradie_vysetrenia, scales = "free_y") +
+#     scale_y_continuous(trans = scales::pseudo_log_trans(base = 10)) +
+#     labs(
+#       x = var_indep_name,
+#       y = var_dep_name,
+#       fill = "Time point"
+#     ) +
+#     theme_sjplot2() +
+#     theme(
+#       axis.title = element_text(size = 14, face = "bold"),
+#       strip.text = element_text(face = "bold"),
+#       strip.background = element_rect(fill = "gray90", color = NA)
+#     )
+#   
+#   return(fig)
+# }
+# 
+fig_mixMODmmt <- function(data, mod, var_indep_name, var_dep_name, upper) {
+  if (is.null(mod)) return(NULL)  # 
   
   data_set <- data |> 
-    mutate(var_indep_value_scl = log(var_indep_value),
-           y_capped =  pmin(data_test$var_dep_value, upper),
-           ind = as.integer(data_test$var_dep_value >= upper)
+    mutate(
+      var_indep_value_scl = scale(var_indep_value),
+      y_capped = pmin(var_dep_value, upper),
+      ind = as.integer(var_dep_value >= upper)
     )
   
-  pred_df <- GLMMadaptive::effectPlotData(mod, newdata = na.omit(data_set ))
+  pred_df <- GLMMadaptive::effectPlotData(mod, newdata = na.omit(data_set))
   
-  
-  fig <- ggplot(pred_df, aes(x = var_indep_value, 
-                             y = var_dep_value)) +
-    geom_point(aes(color = poradie_vysetrenia), alpha = 0.6, show.legend = FALSE) +    # bez legendy pro color
+  fig <- ggplot(pred_df, aes(x = var_indep_value, y = var_dep_value)) +
+    geom_point(aes(color = poradie_vysetrenia), alpha = 0.6, show.legend = FALSE) +
     geom_line(aes(y = pred, color = poradie_vysetrenia), size = 1, show.legend = FALSE) +
     geom_ribbon(aes(ymax = upp, ymin = low, fill = poradie_vysetrenia), 
                 alpha = 0.3, linetype = 0) +
@@ -69,5 +114,4 @@ fig_mixMODmmt <- function(data, mod, var_indep_name, var_dep_name) {
     )
   
   return(fig)
-  
 }
