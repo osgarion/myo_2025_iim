@@ -1,5 +1,5 @@
 # variables ----
-var_indep_01 <- c("mstn", "fst", "fst", "fstl3", "akta")
+var_indep_01 <- c("mstn", "fst", "fstl3", "akta")
 var_dep_01 <- c("mmt8_total", "mmt10_total", "fi_2", "borg10", "haq", 
                 "sf36_mcs", "crp", "ast", "alt", "ck", "ld", 
                 "kreatinin_umol_l", "mitax", "myoact", "physician_activity_vas", 
@@ -89,8 +89,12 @@ d03 <- d02_clinics |>
   ungroup()
 
 # selection ----
-d04_sel1 <- d03 |> 
-  select(projekt_id, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |> 
+d04_sel1 <- d03 |>
+  mutate(
+    odpoved_na_terapii_m0_vs_m6 =
+      str_replace(odpoved_na_terapii_m0_vs_m6, "No Improvement", "No improvement")
+  ) |>
+  select(projekt_id, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
   filter(poradie_vysetrenia %in% c("M0", "M3", "M6", "M18"))
 
 d04_sel1_nested <- d04_sel1 |> 
@@ -104,6 +108,8 @@ d04_sel1_nested <- d04_sel1 |>
                values_to = "var_indep_value") |> 
   group_by(var_dep_name, var_indep_name) |> 
   nest()
+
+# data_set_filtered <- import("data/processed/data_set_filtered_for_R.csv") # neblo možné analyzovat data přímo s mix_model
 
 ## PCA, heatmap ----
 # m0

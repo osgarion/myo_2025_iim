@@ -74,8 +74,7 @@ gg_miss_case(d03 ,facet = poradie_vysetrenia)
 gg_miss_upset(d03) # give an overall pattern of missingness
 gg_miss_fct(x = d03, fct = poradie_vysetrenia)
 
-### selected variables ----
-# selection ----
+## selection ----
 vis_miss(d04_sel1)
 gg_miss_var(d04_sel1)
 gg_miss_var(d04_sel1 ,facet=poradie_vysetrenia)
@@ -122,6 +121,14 @@ ggpairs(data |>
         columns = data |> select(all_of(param_name_sig)) |> names(), 
         lower = list(continuous = my_fn, method = "kendall")) +
   theme_sjplot2()
+
+### selected variable ----
+eda_06 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id) |> 
+  group_by(poradie_vysetrenia) |> 
+  correlate(all_of(var_indep_01)) |> 
+  filter(!var2 %in% var_indep_01) |> 
+  plot()
 
 ## heatmap ----
 # m0
@@ -177,9 +184,153 @@ plot_umap(data_m6, col = group_m6, pca = pca_m6$x, main = "UMAP - M6")
 # uwot::umap(pca_m18$x) |> plot(main = "UMAP - M18")
 plot_umap(data_m18, col = group_m18, pca = pca_m18$x, main = "UMAP - M18")
 
+# densitogram
+eda_01 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id, -odpoved_na_terapii_m0_vs_m6) |> 
+  pivot_longer(cols = fi_2:last_col(),
+               names_to = "param_name",
+               values_to = "param_value") |> 
+  ggplot(aes(param_value, fill=poradie_vysetrenia)) +
+  geom_density(alpha = 0.1) +
+  facet_wrap(~param_name, scales = "free")
+
+eda_02 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id, -poradie_vysetrenia) |> 
+  relocate(odpoved_na_terapii_m0_vs_m6, .before = fi_2) |>
+  pivot_longer(cols = fi_2:last_col(),
+               names_to = "param_name",
+               values_to = "param_value") |> 
+  ggplot(aes(param_value, fill=odpoved_na_terapii_m0_vs_m6)) +
+  geom_density(alpha = 0.1) +
+  facet_wrap(~param_name, scales = "free")
+
+
+# scatter plot
+eda_03 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id) |> 
+  mutate(poradie_vysetrenia = str_remove(poradie_vysetrenia, "M") |> as.numeric()) |> 
+  relocate(odpoved_na_terapii_m0_vs_m6, poradie_vysetrenia, .before = fi_2) |> 
+  pivot_longer(cols = fi_2:last_col(),
+               names_to = "param_name",
+               values_to = "param_value") |> 
+  ggplot(aes(poradie_vysetrenia, param_value, col=odpoved_na_terapii_m0_vs_m6)) +
+  geom_jitter() +
+  stat_smooth(method="loess", se=FALSE) +
+  facet_wrap(~param_name, scales = "free")
+
+eda_04 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id, -all_of(var_indep_01[2:length(var_indep_01)])) |> 
+  relocate(odpoved_na_terapii_m0_vs_m6, poradie_vysetrenia, mstn,.before = fi_2) |> 
+  pivot_longer(cols = fi_2:last_col(),
+               names_to = "param_name",
+               values_to = "param_value") |> 
+  ggplot(aes(log(mstn), param_value, col=poradie_vysetrenia)) +
+  geom_point() +
+  stat_smooth(method="loess", se=FALSE) +
+  theme_sjplot2() +
+  facet_wrap(~param_name, scales = "free")
+
+
+# boxplot
+eda_05 <- d04_sel1 |> 
+  select(!contains("mmt"), -projekt_id, -odpoved_na_terapii_m0_vs_m6) |> 
+  pivot_longer(cols = fi_2:last_col(),
+               names_to = "param_name",
+               values_to = "param_value") |> 
+  ggplot(aes(poradie_vysetrenia, param_value, col=poradie_vysetrenia)) +
+  geom_boxplot() +
+  facet_wrap(~param_name, scales = "free")
+
+# correlation
+
+
 
 # Statistics ----
-# 
-# 
+## mmt -----
+### model ----
+# model
+res_mixMod_mmt <-  d04_sel1_nested |> 
+  filter(str_detect(var_dep_name, "mmt8")) |> 
+  mutate(mod = map(data, ~possmixMODmmt(.x, upper = 80)),
+         tidier = map(mod, tidy),
+         fig = pmap(list(data, mod, var_indep_name, var_dep_name, upper = 80),fig_mixMODmmt)
+  ) |> 
+  bind_rows(d04_sel1_nested |> 
+              filter(str_detect(var_dep_name, "mmt10")) |> 
+              mutate(mod = map(data, ~possmixMODmmt(.x, upper = 100)),
+                     tidier = map(mod, tidy),
+                     fig = pmap(list(data, mod, var_indep_name, var_dep_name, upper = 100),fig_mixMODmmt)
+              ))
+
+
+data_set <- prepare_for_censored_model(d04_sel1_nested$data[[5]],
+                                       
+                                       dep_var = "var_dep_value",
+                                       indep_var = "var_indep_value",
+                                       group_var = "projekt_id",
+                                       upper = 100
+)
+
+data_mod <- mixed_model(
+  fixed  = cbind(y_capped, ind) ~ poradie_vysetrenia + var_indep_value_scl,
+  random = ~ 1 | projekt_id,
+  family = censored.normal(),
+  data   = data_set
+)
+# data for mmt_10 and mstn analyses has to be specific for this analysis 
+data_pred <- GLMMadaptive::effectPlotData(data_mod, newdata = na.omit(data_set))
+data_fig <- ggplot(pred_df, aes(x = var_indep_value, y = var_dep_value)) +
+  geom_point(aes(color = poradie_vysetrenia), alpha = 0.6, show.legend = FALSE) +
+  geom_line(aes(y = pred, color = poradie_vysetrenia), size = 1, show.legend = FALSE) +
+  geom_ribbon(aes(ymax = upp, ymin = low, fill = poradie_vysetrenia), 
+              alpha = 0.3, linetype = 0) +
+  facet_wrap(~ poradie_vysetrenia, scales = "free_y") +
+  scale_y_continuous(trans = scales::pseudo_log_trans(base = 10)) +
+  labs(
+    x = "mstn",
+    y = "mmt10_total",
+    fill = "Time point"
+  ) +
+  theme_sjplot2() +
+  theme(
+    axis.title = element_text(size = 14, face = "bold"),
+    strip.text = element_text(face = "bold"),
+    strip.background = element_rect(fill = "gray90", color = NA)
+  )
+
+rx_mmt_mstn <- which(d04_sel1_nested$var_dep_name == "mmt10_total" &
+                       d04_sel1_nested$var_indep_name == "mstn")
+res_mixMod_mmt$data[[rx_mmt_mstn]] <- data_set
+res_mixMod_mmt$mod[[rx_mmt_mstn]] <- data_mod
+res_mixMod_mmt$tidier [[rx_mmt_mstn]] <- data_mod |> tidy()
+res_mixMod_mmt$fig[[rx_mmt_mstn]] <- data_fig
+
+### figures ----
+# pdf("output/figures/250704_mmt_01.pdf", width = 10, height = 6.5)
+walk(res_mixMod_mmt$fig, print)
+# dev.off()
+
+### Table ----
+res_mixMod_mmt_tab <- res_mixMod_mmt |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep")) |> 
+  select(-data, -mod, -term, -std.error, -statistic, -fig)
+
+# export(res_mixMod_mmt_tab, "output/tables/250704_mmt_01.xlsx")
+
+# kable
+res_mixMod_mmt_tab |> 
+  mutate(p.value = ifelse(p.value < 0.05, 
+                          ifelse(p.value < 0.001,
+                                 "<b><0.001</b>", 
+                                 sprintf("<b>%.3f</b>", p.value)), 
+                          sprintf("%.3f", p.value))) |> 
+  kable(escape = F, format = "html",
+        digits = 3,
+        col.names = c("Dependent variable", "Independent variable", "Estimate",
+                      "p-value", "2.5% CI", "97.5% CI")) |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE) |> 
+  collapse_rows(1, valign = "top") 
 
 

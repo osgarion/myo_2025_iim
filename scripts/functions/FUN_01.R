@@ -4,7 +4,8 @@ pacman::p_load(update = T,
                equatiomatic, beepr, tictoc, 
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
-               kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot
+               kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
+               lmerTest, dlookr
 )
 
 # Missing values, multivariate analyses
@@ -23,7 +24,8 @@ conflicted::conflicts_prefer(
   tidyr::extract,
   janitor::clean_names,
   dplyr::relocate,
-  lmerTest::lmer
+  lmerTest::lmer,
+  GLMMadaptive::predict
 )
 
 ## Conflicted functions ----
@@ -39,8 +41,7 @@ options(knitr.kable.NA = '') # empty space in cells with NAs in kable
 options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
         scipen = 999)            # non-academic format of numbers
 
-## Possibly ----
-possLMER <- possibly(.f=lmer, otherwise = NA_real_)
+
 
 
 ## Number of cores ----
@@ -113,11 +114,43 @@ plot_umap <- function(coords, col, pca, main = NULL) {
   }
 
 
-
-
-
-
-
+fig_mixMODmmt <- function(data, mod, var_indep_name, var_dep_name, upper) {
+  if (is.null(mod)) return(NULL)  # 
+  
+  data_set <- data |> 
+    mutate(
+      var_indep_value_scl = log(var_indep_value +1),
+      y_capped = pmin(var_dep_value, upper),
+      ind = as.integer(var_dep_value >= upper)
+    ) |> 
+    drop_na(var_dep_value, var_indep_value) |>
+    group_by(projekt_id) |>
+    filter(n() >= 3) |>
+    ungroup()
+  
+  pred_df <- GLMMadaptive::effectPlotData(mod, newdata = na.omit(data_set))
+  
+  fig <- ggplot(pred_df, aes(x = var_indep_value, y = var_dep_value)) +
+    geom_point(aes(color = poradie_vysetrenia), alpha = 0.6, show.legend = FALSE) +
+    geom_line(aes(y = pred, color = poradie_vysetrenia), size = 1, show.legend = FALSE) +
+    geom_ribbon(aes(ymax = upp, ymin = low, fill = poradie_vysetrenia), 
+                alpha = 0.3, linetype = 0) +
+    facet_wrap(~ poradie_vysetrenia, scales = "free") +
+    scale_y_continuous(trans = scales::pseudo_log_trans(base = 10)) +
+    labs(
+      x = var_indep_name,
+      y = var_dep_name,
+      fill = "Time point"
+    ) +
+    theme_sjplot2() +
+    theme(
+      axis.title = element_text(size = 14, face = "bold"),
+      strip.text = element_text(face = "bold"),
+      strip.background = element_rect(fill = "gray90", color = NA)
+    )
+  
+  return(fig)
+}
 
 
 # tables ----
@@ -131,7 +164,7 @@ my_skim <- skimr::skim_with(numeric = sfl(median = ~ median(., na.rm = TRUE),
                                           mad = ~ mad(., na.rm = TRUE)), 
                             append = T)
 
-
+## import ----
 file_to_load <- function(folder_path, phrase) {
   # Získání všech souborů (včetně cesty)
   files <- list.files(folder_path, recursive = TRUE, full.names = TRUE)
@@ -142,3 +175,72 @@ file_to_load <- function(folder_path, phrase) {
   return(matching_files)
 }
 
+## datafor mix_model ----
+prepare_for_censored_model <- function(data, dep_var, indep_var, group_var, upper = NULL) {
+  # Základní kontrola vstupů
+  if (!all(c(dep_var, indep_var, group_var) %in% names(data))) {
+    stop("Zadané názvy proměnných neodpovídají sloupcům v datech.")
+  }
+  
+  # Horní mez pro y_capped (implicitně maximum závislé proměnné)
+  if (is.null(upper)) {
+    upper <- max(data[[dep_var]], na.rm = TRUE)
+  }
+  
+  # Příprava dat
+  data_prepared <- data |>
+    mutate(
+      var_dep_value        = .data[[dep_var]],
+      var_indep_value      = .data[[indep_var]],
+      projekt_id           = .data[[group_var]],
+      var_indep_value_log  = log(var_indep_value + 1),
+      var_indep_value_scl  = as.numeric(scale(var_indep_value_log)),
+      y_capped             = pmin(var_dep_value, upper),
+      ind                  = as.integer(var_dep_value >= upper)
+    ) |>
+    drop_na(var_dep_value, var_indep_value, var_indep_value_scl, y_capped, ind) |>
+    group_by(projekt_id) |>
+    filter(n() >= 3) |>
+    mutate(
+      sd_y = sd(y_capped),
+      sd_x = sd(var_indep_value_scl)
+    ) |>
+    filter(sd_y > 0, sd_x > 0) |>
+    ungroup() |>
+    select(-sd_y, -sd_x)
+  
+  return(data_prepared)
+}
+
+mod_mixMODmmt <- function(data, upper) {
+  
+  
+  data_set <- data |>
+    mutate(
+      var_indep_value_scl = log(var_indep_value + 1),
+      y_capped = pmin(var_dep_value, upper),
+      ind = as.integer(var_dep_value >= upper)
+    ) |>
+    drop_na(var_dep_value, var_indep_value) |>
+    group_by(projekt_id) |>
+    filter(n() >= 3) |>
+    mutate(
+      sd_y = sd(y_capped),
+      sd_x = sd(var_indep_value_scl)
+    ) |>
+    filter(sd_y > 0, sd_x > 0) |>  
+    ungroup() |>
+    select(-sd_y, -sd_x)  
+  
+  fm <- mixed_model(
+    fixed  = cbind(y_capped, ind) ~ poradie_vysetrenia + var_indep_value_scl,
+    random = ~ 1 | projekt_id,
+    family = censored.normal(),
+    data   = data_set
+  )
+  return(fm)
+}
+
+## Possibly ----
+possLMER <- possibly(.f=lmer, otherwise = NA_real_)
+possmixMODmmt <- possibly(mod_mixMODmmt, otherwise = NULL)
