@@ -313,7 +313,7 @@ res_mixMod_mmt$fig[[rx_mmt_mstn]] <- data_fig
 walk(res_mixMod_mmt$fig, print)
 # dev.off()
 
-### Table ----
+### table ----
 res_mixMod_mmt_tab <- res_mixMod_mmt |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep")) |> 
@@ -336,6 +336,224 @@ res_mixMod_mmt_tab |>
                 full_width = FALSE) |> 
   collapse_rows(1, valign = "top") 
 
-## 
+## others - without adjustment ----
+### model ----
+res_mixMod_raw <- d04_sel1_nested |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_raw <- res_mixMod_raw |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_raw |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
 
 
+### table ----
+res_mixMod_raw_tab <- res_mixMod_raw |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+
+# export(res_mixMod_raw_tab, "output/tables/250714_others_raw_01.xlsx")
+
+### figures ----
+pdf("output/figures/250714_others_raw_01.pdf")
+walk(res_mixMod_raw$fig, print)
+dev.off()
+
+
+## others - age adjusted ----
+### model ----
+res_mixMod_vek <- d04_sel1_nested |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + vek + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + vek + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  vek + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl +  vek + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_vek <- res_mixMod_vek |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_vek |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+### table ----
+res_mixMod_vek_tab <- res_mixMod_vek |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+
+# export(res_mixMod_vek_tab, "output/tables/250714_others_vek_01.xlsx")
+
+### figures ----
+# pdf("output/figures/250714_others_vek_01.pdf")
+walk(res_mixMod_vek$fig, print)
+# dev.off()
+
+
+## others - podnemoc adjusted ----
+### model ----
+res_mixMod_type <- d04_sel1_nested |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             podtyp_nemoci = factor(podtyp_nemoci)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci +  (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_type <- res_mixMod_type |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_type |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_02(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+### table ----
+res_mixMod_type_tab <- res_mixMod_type |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+
+# export(res_mixMod_type_tab, "output/tables/250714_others_type_01.xlsx")
+
+### figures ----
+# pdf("output/figures/250714_others_type_01.pdf")
+walk(res_mixMod_type$fig, print)
+# dev.off()

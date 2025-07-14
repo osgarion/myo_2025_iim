@@ -5,7 +5,7 @@ pacman::p_load(update = T,
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
-               lmerTest, dlookr, multilevelmod
+               lmerTest, dlookr, multilevelmod,furrr
 )
 
 # Missing values, multivariate analyses
@@ -202,41 +202,59 @@ plot_mixed_terms_01 <- function(model,
                                 var_pattern = "var_indep_",
                                 xlab = NULL, 
                                 ylab = NULL,
+                                p_label_size = 6,
                                 ...) {
-  # model       : an lmerMod (or lmerModLmerTest) object
-  # var_pattern : regex or substring to match against the fixed‐effect names
-  # xlab, ylab  : axis labels (NULL = leave as-is)
-  # ...         : extra args passed on to plot_model()
-  
-  # 1) get fixed‐effect term names
   library(broom.mixed)
-  all_terms <- broom.mixed::tidy(model, effects = "fixed")$term
+  library(sjPlot)
+  library(ggplot2)
+  library(sjmisc)    # for theme_sjplot2()
   
-  # 2) pick those matching your pattern
-  sel_terms <- grep(var_pattern, all_terms, value = TRUE)
+  # 1) grab fixed‐effect terms + p‐values
+  fe <- broom.mixed::tidy(as_lmerModLmerTest(model$fit), effects = "fixed")
+  
+  # 2) select those matching your pattern
+  sel_terms <- grep(var_pattern, fe$term, value = TRUE)
   if (length(sel_terms) == 0) {
-    stop("No fixed‐effect terms matched pattern: ", var_pattern)
+    stop("No fixed-effect terms matched pattern: ", var_pattern)
+  }
+  if (length(sel_terms) > 1) {
+    warning("More than one term matched; plotting all. p-value will use the first.")
   }
   
-  # 3) build the emmeans plot
-  library(sjPlot)
+  # 3) extract the p-value of the first matched term
+  pval <- fe %>% 
+    filter(term == sel_terms[1]) %>% 
+    pull(p.value)
+  
+  # 4) build the emmeans plot
   p <- sjPlot::plot_model(
     model,
-    type  = "emm",
-    terms = sel_terms,
-    show.data = TRUE,
-    ...
+    type      = "emm",
+    terms     = sel_terms,
+    show.data = TRUE
   )
   
-  # 4) apply custom axis labels if provided
+  # 5) apply axis labels if given
   if (!is.null(xlab) || !is.null(ylab)) {
-    p <- p + ggplot2::labs(
-      x = if (is.null(xlab)) ggplot2::waiver() else xlab,
-      y = if (is.null(ylab)) ggplot2::waiver() else ylab
+    p <- p + labs(
+      x = xlab %||% waiver(),
+      y = ylab %||% waiver()
     )
   }
   
-  p <- p + 
+  # 6) annotate p-value in top-right
+  p <- p +
+    annotate(
+      "text",
+      x     = Inf,
+      y     = Inf,
+      label = paste0("p = ", signif(pval, 2)),
+      hjust = 1.1,
+      vjust = 1.5,
+      size  = p_label_size
+    ) +
+    
+    # 7) custom theme
     theme_sjplot2() +
     theme(
       plot.title       = element_blank(),
@@ -250,6 +268,67 @@ plot_mixed_terms_01 <- function(model,
   
   return(p)
 }
+
+plot_mixed_terms_02 <- function(model, 
+                                var_pattern = "var_indep_", 
+                                xlab        = NULL, 
+                                ylab        = NULL) {
+  # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
+  # var_pattern  : regex/substring to match raw vs scaled predictor
+  # xlab, ylab   : axis labels; NULL will default to the matched term / "Predicted response"
+  
+  library(ggeffects)
+  library(ggplot2)
+  library(broom.mixed)
+  library(lmerTest)
+  
+  # 1) pull out the lmerMod
+  engine <- if (inherits(model, "model_fit")) model$fit else model
+  
+  # 2) find the exact fixed‐effect term(s)
+  fe      <- broom.mixed::tidy(as_lmerModLmerTest(engine), effects = "fixed")
+  matches <- grep(var_pattern, fe$term, value = TRUE)
+  if (length(matches) == 0) {
+    stop("No fixed-effect term matches: ", var_pattern)
+  }
+  # prefer the scaled variant if present:
+  predictor <- if ("var_indep_value_scl" %in% matches) {
+    "var_indep_value_scl"
+  } else matches[1]
+  
+  # 3) extract its p-value
+  pval <- fe %>% 
+    filter(term == predictor) %>% 
+    pull(p.value) %>% 
+    signif(2)
+  
+  # 4) get ggpredict data
+  preds <- ggpredict(
+    engine,
+    terms = c(predictor, "podtyp_nemoci")
+  )
+  
+  # 5) build the base plot
+  p <- plot(preds, show_data = TRUE) +
+    facet_wrap(~ group, scales = "free_y") +
+    labs(
+      title  = paste0("p-value = ", pval),
+      x      = xlab %||% predictor,
+      y      = ylab %||% "Predicted response",
+      colour = "Subtype"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      strip.text       = element_text(face = "bold", size = 12),
+      axis.title       = element_text(face = "bold", size = 14),
+      axis.text        = element_text(size = 12),
+      panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+      panel.grid.minor = element_blank()
+    )
+  
+  return(p)
+}
+
 
 # tables ----
 ## column with 0, 1, and NA ----

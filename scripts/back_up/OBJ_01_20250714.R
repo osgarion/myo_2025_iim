@@ -109,7 +109,7 @@ d04_sel1_nested <- d04_sel1 |>
   group_by(var_dep_name, var_indep_name) |> 
   nest()
 
-# data_set_filtered <- import("data/processed/data_set_filtered_for_R.csv") # neblo možné analyzovat data přímo s mix_model
+# data_set_filtered <- import("data/processed/data_set_filtered_for_R.csv") # nebylo možné analyzovat data přímo s mix_model
 
 ## PCA, heatmap ----
 # m0

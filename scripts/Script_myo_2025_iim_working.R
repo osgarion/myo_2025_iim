@@ -7,83 +7,81 @@ back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirect
 # 250714 ----
 
 
-res_mixMod_vek <- d04_sel1_nested |> 
-  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
-  filter(!str_detect(var_dep_name, "mmt")) |>
-  mutate(data = map(data, ~ .x |> 
-                      mutate(var_indep_value_scl = log(var_indep_value + 1),
-                             var_dep_value_scl = log(var_dep_value + 1)
-                      )),
-         mod_raw = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + vek + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_10 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + vek + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_01 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  vek + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_11 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl +  vek + (1 | projekt_id),
-           data = .x
-         )),
-         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+
+
+
+mod_test <- res_mixMod_type$mod_value[[1]]
+
+
+
+
+
+
+
+plot_model(mod_test, type = "emm", terms = "var_indep_value_scl", show.p = TRUE)
+
+plot_mixed_terms_02 (mod_test, xlab="test1", ylab="test2")
+
+
+
+
+
+# 1) grab fixed‐effect terms + p‐values
+fe <- broom.mixed::tidy(as_lmerModLmerTest(mod_test$fit), effects = "fixed")
+
+# 2) select those matching your pattern
+sel_terms <- grep(var_pattern, fe$term, value = TRUE)
+if (length(sel_terms) == 0) {
+  stop("No fixed-effect terms matched pattern: ", var_pattern)
+}
+if (length(sel_terms) > 1) {
+  warning("More than one term matched; plotting all. p-value will use the first.")
+}
+
+# 3) extract the p-value of the first matched term
+pval <- fe %>% 
+  filter(term == sel_terms[1]) %>% 
+  pull(p.value)
+
+# 4) build the emmeans plot
+p <- sjPlot::plot_model(
+  mod_test,
+  type      = "emm",
+  terms     = sel_terms,
+  show.data = TRUE
+)
+
+# 5) apply axis labels if given
+if (!is.null(xlab) || !is.null(ylab)) {
+  p <- p + labs(
+    x = xlab %||% waiver(),
+    y = ylab %||% waiver()
   )
+}
 
-res_mixMod_vek <- res_mixMod_vek |> 
-  select(-contains("shap")) |> 
-  pivot_longer(cols = contains("mod"),
-               names_to = "mod_name",
-               values_to = "mod_value") |> 
-  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
-  left_join(res_mixMod_vek |> 
-              select(-contains("mod_"), -data) |> 
-              pivot_longer(cols = contains("shap"),
-                           names_to = "shap_name",
-                           values_to = "shap_value") |>
-              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
-            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
-  group_by(var_dep_name, var_indep_name) |> 
-  slice_max(shap_value, n = 1) |> 
-  ungroup() |> 
-  mutate(tidier = map(mod_value, lmer_tidier),
-         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
-                    ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3)))
-
-# table
-res_mixMod_vek_tab <- res_mixMod_vek |> 
-  unnest(tidier) |> 
-  filter(term == "var_indep_value") |> 
-  select(var_dep_name, var_indep_name, estimate, p.value,
-         conf.low, conf.high,  shap_value) 
-
-# figures 
-walk(res_mixMod_vek$fig)
-
-
-
-mod_test <- res_mixMod_vek$mod_value[[1]]
-
-
-plot_model(mod_test, type = "emm", terms = "var_indep_value_scl", show.p = TRUE)
-
-plot_mixed_terms(mod, xlab="test1", ylab="test2")
-
-
-
-
-
-
+# 6) annotate p-value in top-right
+p <- p +
+  annotate(
+    "text",
+    x     = Inf,
+    y     = Inf,
+    label = paste0("p = ", signif(pval, 2)),
+    hjust = 1.1,
+    vjust = 1.5,
+    size  = p_label_size
+  ) +
+  
+  # 7) custom theme
+  theme_sjplot2() +
+  theme(
+    plot.title       = element_blank(),
+    plot.subtitle    = element_text(size = 20, color = "grey40", hjust = 0),
+    axis.title       = element_text(face = "bold", size = 20),
+    axis.text        = element_text(size = 18, color = "grey20"),
+    panel.grid.major = element_line(linetype = "dotted", color = "grey80"),
+    panel.grid.minor = element_blank(),
+    legend.position  = "none"
+  )
 
 
 
