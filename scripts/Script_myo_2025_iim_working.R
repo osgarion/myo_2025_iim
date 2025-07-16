@@ -3,6 +3,107 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
+# 250716 ----
+# 1) Re‑fit with an interaction
+mod_int <- lmer(
+  var_dep_value ~ var_indep_value * podtyp_nemoci_zjednoduseny
+  + poradie_vysetrenia
+  + (1 | projekt_id),
+  data = data_test
+)
+
+# 2) Recompute the ggpredict grid
+library(ggeffects)
+preds_int <- ggpredict(
+  mod_int,
+  terms = c("var_indep_value [all]", "podtyp_nemoci_zjednoduseny")
+)
+
+# 3) Plot—now each facet gets its own slope
+plot(preds_int, show_data = TRUE) +
+  facet_wrap(~ group, scales = "free_y") +
+  labs(
+    x      = "var_indep_value",
+    y      = "Predicted var_dep_value",
+    colour = "Subtype"
+  ) +
+  theme_minimal()
+
+
+model <- res_mixMod_type$mod_value[[3]]
+
+plot_mixed_terms_03 <- function(model, 
+                                var_pattern = "var_indep_", 
+                                xlab        = NULL, 
+                                ylab        = NULL) {
+  # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
+  # var_pattern  : regex/substring to match raw vs scaled predictor
+  # xlab, ylab   : axis labels; NULL will default to the matched term / "Predicted response"
+  
+  library(ggeffects)
+  library(ggplot2)
+  library(broom.mixed)
+  library(lmerTest)
+  
+  # 1) pull out the lmerMod
+  engine <- if (inherits(model, "model_fit")) model$fit else model
+  
+  # 2) find the exact fixed‐effect term(s)
+  fe      <- broom.mixed::tidy(as_lmerModLmerTest(engine), effects = "fixed")
+  matches <- grep(var_pattern, fe$term, value = TRUE)
+  if (length(matches) == 0) {
+    stop("No fixed-effect term matches: ", var_pattern)
+  }
+  # prefer the scaled variant if present:
+  predictor <- if ("var_indep_value_scl" %in% matches) {
+    "var_indep_value_scl"
+  } else matches[1]
+  
+  # 3) extract its p-value
+  pval <- fe %>% 
+    filter(term == predictor) %>% 
+    pull(p.value) %>% 
+    signif(2)
+  
+  # 4) get ggpredict data
+  preds <- ggpredict(
+    engine,
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny")
+  )
+  
+  # 5) build the base plot
+  p <- plot(preds, show_data = TRUE) +
+    facet_wrap(~ group, scales = "free_y") +
+    labs(
+      title  = paste0("p-value = ", pval),
+      x      = xlab %||% predictor,
+      y      = ylab %||% "Predicted response",
+      colour = "Subtype"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      strip.text       = element_text(face = "bold", size = 12),
+      axis.title       = element_text(face = "bold", size = 14),
+      axis.text        = element_text(size = 12),
+      panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+      panel.grid.minor = element_blank()
+    )
+  
+  return(p)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 250714 ----
 

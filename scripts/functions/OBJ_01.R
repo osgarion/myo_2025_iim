@@ -66,7 +66,7 @@ d02_clinics <- import(path_clin_01) |>
     pohlavi = factor(pohlavi),
     odpoved_na_terapii_m0_vs_m6 = factor(odpoved_na_terapii_m0_vs_m6),
     odpoved_na_terapii_m0_vs_m18 = factor((odpoved_na_terapii_m0_vs_m18)),
-    podtyp_nemoci = factor(podtyp_nemoci),
+    podtyp_nemoci_zjednoduseny = factor(podtyp_nemoci_zjednoduseny),
     kurak_nejmene_100_cigaret = factor(kurak_nejmene_100_cigaret)
   ) |> 
   mutate(across(where(is_01_col), as.factor)) |> 
@@ -84,7 +84,7 @@ d03 <- d02_clinics |>
                    "bbm_id",
                    "pohlavi")) |> 
   group_by(projekt_id) |> 
-  fill(podtyp_nemoci) |> 
+  fill(podtyp_nemoci_zjednoduseny) |> 
   fill(odpoved_na_terapii_m0_vs_m6, .direction = "downup") |> 
   ungroup()
 
@@ -94,7 +94,7 @@ d04_sel1 <- d03 |>
     odpoved_na_terapii_m0_vs_m6 =
       str_replace(odpoved_na_terapii_m0_vs_m6, "No Improvement", "No improvement")
   ) |>
-  select(projekt_id, vek, gk, davka_gk_mg_den, podtyp_nemoci, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
+  select(projekt_id, vek, gk, davka_gk_mg_den, podtyp_nemoci_zjednoduseny, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
   filter(poradie_vysetrenia %in% c("M0", "M3", "M6", "M18"))
 
 d04_sel1_nested <- d04_sel1 |> 
@@ -122,7 +122,7 @@ data_m0 <- d03 |>
   select(where(~ !anyNA(.x)))
 group_m0 <- d03 |> 
   filter(poradie_vysetrenia == "M0") |> 
-  pull(podtyp_nemoci)
+  pull(podtyp_nemoci_zjednoduseny)
 # m3
 data_m3 <- d03 |> 
   filter(poradie_vysetrenia == "M3") |> 
@@ -133,7 +133,7 @@ data_m3 <- d03 |>
   select(where(~ !anyNA(.x)))
 group_m3 <- d03 |> 
   filter(poradie_vysetrenia == "M3") |> 
-  pull(podtyp_nemoci)
+  pull(podtyp_nemoci_zjednoduseny)
 # m6
 data_m6 <- d03 |> 
   filter(poradie_vysetrenia == "M6") |> 
@@ -144,7 +144,7 @@ data_m6 <- d03 |>
   select(where(~ !anyNA(.x)))
 group_m6 <- d03 |> 
   filter(poradie_vysetrenia == "M6") |> 
-  pull(podtyp_nemoci)
+  pull(podtyp_nemoci_zjednoduseny)
 # m18
 data_m18 <- d03 |> 
   filter(poradie_vysetrenia == "M18") |> 
@@ -155,7 +155,7 @@ data_m18 <- d03 |>
   select(where(~ !anyNA(.x)))
 group_m18 <- d03 |> 
   filter(poradie_vysetrenia == "M18") |> 
-  pull(podtyp_nemoci)
+  pull(podtyp_nemoci_zjednoduseny)
 
 
 

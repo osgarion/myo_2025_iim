@@ -5,7 +5,7 @@ pacman::p_load(update = T,
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
-               lmerTest, dlookr, multilevelmod,furrr
+               lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer
 )
 
 # Missing values, multivariate analyses
@@ -305,7 +305,7 @@ plot_mixed_terms_02 <- function(model,
   # 4) get ggpredict data
   preds <- ggpredict(
     engine,
-    terms = c(predictor, "podtyp_nemoci")
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny")
   )
   
   # 5) build the base plot
@@ -329,6 +329,106 @@ plot_mixed_terms_02 <- function(model,
   return(p)
 }
 
+plot_mixed_terms_03 <- function(model, 
+                                var_pattern = "var_indep_", 
+                                xlab        = NULL, 
+                                ylab        = NULL) {
+  # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
+  # var_pattern  : regex/substring to match raw vs scaled predictor
+  # xlab, ylab   : axis labels; NULL will default to the matched term / "Predicted response"
+  
+  library(ggeffects)
+  library(ggplot2)
+  library(broom.mixed)
+  library(lmerTest)
+  
+  # 1) pull out the lmerMod
+  engine <- if (inherits(model, "model_fit")) model$fit else model
+  
+  # 2) find the exact fixed‐effect term(s)
+  fe      <- broom.mixed::tidy(as_lmerModLmerTest(engine), effects = "fixed")
+  matches <- grep(var_pattern, fe$term, value = TRUE)
+  if (length(matches) == 0) {
+    stop("No fixed-effect term matches: ", var_pattern)
+  }
+  # prefer the scaled variant if present:
+  predictor <- if ("var_indep_value_scl" %in% matches) {
+    "var_indep_value_scl"
+  } else matches[1]
+  
+  # 3) extract its p-value
+  pval <- fe %>% 
+    filter(term == predictor) %>% 
+    pull(p.value) %>% 
+    signif(2)
+  
+  # 4) get ggpredict data
+  preds <- ggpredict(
+    engine,
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny")
+  )
+  
+  # 5) build the base plot
+  ct <- emmeans(extract_fit_engine(model), "podtyp_nemoci_zjednoduseny") |> 
+    contrast() |> data.frame()
+  
+  preds2 <- ggpredict(
+    engine,
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny", "poradie_vysetrenia")
+  )
+  
+  raw_data <- attr(preds2, "rawdata")
+  
+  # 1) Build a lookup table of p‐values per facet
+  pval_df <- ct %>% 
+    # strip off the common prefix so that it matches your 'group' levels
+    mutate(group = str_extract(contrast, "\\d+"),
+           p.label = paste0("p = ", signif(p.value, 3))) %>%
+    select(group, p.label)
+  
+  # 2) Your base plot
+  p <- plot(preds) +
+    geom_point(
+      data        = raw_data,
+      aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
+      size = 3,
+      alpha       = 0.3,
+      inherit.aes = FALSE
+    ) +
+    scale_fill_brewer(palette = "Dark2") +
+    scale_color_brewer(palette = "Dark2") +
+    scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
+    # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
+    # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +
+    facet_wrap(~ group, scales = "free_y") +
+    labs(
+      title  = paste0("p-value = ", pval),
+      x      = xlab %||% predictor,
+      y      = ylab %||% "Predicted response",
+      colour = ""
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      strip.text       = element_text(face = "bold", size = 12),
+      axis.title       = element_text(face = "bold", size = 14),
+      axis.text        = element_text(size = 12),
+      panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+      panel.grid.minor = element_blank()
+    )
+  
+  # 3) Add a geom_text layer to annotate each facet
+  p <- p + 
+    geom_text(
+      data = pval_df,
+      aes(x = Inf, y = Inf, label = p.label),
+      hjust = 1.1,    # nudge left from right edge
+      vjust = 1.1,    # nudge down from top
+      size  = 3, 
+      inherit.aes = FALSE
+    )
+  
+  return(p)
+}
 
 # tables ----
 ## column with 0, 1, and NA ----

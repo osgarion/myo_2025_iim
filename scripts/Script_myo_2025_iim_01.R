@@ -492,26 +492,26 @@ res_mixMod_type <- d04_sel1_nested |>
   mutate(data = map(data, ~ .x |> 
                       mutate(var_indep_value_scl = log(var_indep_value + 1),
                              var_dep_value_scl = log(var_dep_value + 1),
-                             podtyp_nemoci = factor(podtyp_nemoci)
+                             podtyp_nemoci_zjednoduseny = factor(podtyp_nemoci_zjednoduseny)
                       )),
          mod_raw = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci + (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          mod_log_10 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          mod_log_01 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci +  (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci_zjednoduseny +  (1 | projekt_id),
            data = .x
          )),
          mod_log_11 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
@@ -538,7 +538,7 @@ res_mixMod_type <- res_mixMod_type |>
   ungroup() |> 
   mutate(tidier = map(mod_value, lmer_tidier),
          fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
-                    ~plot_mixed_terms_02(model = ..1, xlab = ..2, ylab = ..3))) 
+                    ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3))) 
 
 
 ### table ----
