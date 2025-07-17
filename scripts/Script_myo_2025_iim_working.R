@@ -30,7 +30,8 @@ plot(preds_int, show_data = TRUE) +
   theme_minimal()
 
 
-model <- res_mixMod_type$mod_value[[3]]
+model <- res_mixMod_type$mod_value[[50]]
+
 
 plot_mixed_terms_03 <- function(model, 
                                 var_pattern = "var_indep_", 
@@ -65,6 +66,8 @@ plot_mixed_terms_03 <- function(model,
     pull(p.value) %>% 
     signif(2)
   
+  
+  
   # 4) get ggpredict data
   preds <- ggpredict(
     engine,
@@ -72,37 +75,89 @@ plot_mixed_terms_03 <- function(model,
   )
   
   # 5) build the base plot
-  p <- plot(preds, show_data = TRUE) +
+  ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
+    contrast() |> data.frame()
+  
+  preds2 <- ggpredict(
+    engine,
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny", "poradie_vysetrenia")
+  )
+  
+  raw_data <- attr(preds2, "rawdata")
+  
+  # 1) Build a lookup table of p‐values per facet
+  pval_df <- ct %>% 
+    # strip off the common prefix so that it matches your 'group' levels
+    mutate(group = str_extract(contrast, "\\d+"),
+           p.label = paste0("p = ", signif(p.value, 3))) %>%
+    select(group, p.label)
+  
+  
+  fml_new <- extract_fit_engine(model)@call$formula |> 
+    deparse() |> 
+    paste(collapse = " ") |> 
+    str_squish() |> 
+    str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
+                "* podtyp_nemoci_zjednoduseny") |> 
+    as.formula()
+  
+  data_new <- extract_fit_engine(model)@frame
+  
+  preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
+  
+  predictor2 <- paste0(predictor, " [all]")
+  
+  preds_int <- ggpredict(
+    preds3,
+    terms = c(predictor2, "podtyp_nemoci_zjednoduseny")
+  )   
+  
+  
+  # 2) Your base plot
+  p <- plot(preds_int) +
+    geom_point(
+      data        = raw_data,
+      aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
+      size = 3,
+      alpha       = 0.3,
+      inherit.aes = FALSE
+    ) +
+    scale_fill_brewer(palette = "Dark2") +
+    scale_color_brewer(palette = "Dark2") +
+    scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
+    # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
+    # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +
     facet_wrap(~ group, scales = "free_y") +
     labs(
       title  = paste0("p-value = ", pval),
       x      = xlab %||% predictor,
       y      = ylab %||% "Predicted response",
-      colour = "Subtype"
+      colour = ""
     ) +
-    theme_minimal(base_size = 14) +
+    theme_minimal(base_size = 18) +
     theme(
-      strip.text       = element_text(face = "bold", size = 12),
-      axis.title       = element_text(face = "bold", size = 14),
-      axis.text        = element_text(size = 12),
+      strip.text       = element_text(face = "bold", size = 22),
+      axis.title       = element_text(face = "bold", size = 22),
+      axis.text        = element_text(size = 21),
+      plot.title       = element_text(face = "bold", size = 25, hjust = 0.5),
       panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
       panel.grid.minor = element_blank()
     )
   
+  # 3) Add a geom_text layer to annotate each facet
+  p <- p + 
+    geom_text(
+      data = pval_df,
+      aes(x = Inf, y = Inf, label = p.label),
+      hjust = 1.1,    # nudge left from right edge
+      vjust = 1.1,    # nudge down from top
+      size  = 5, 
+      inherit.aes = FALSE
+    )
+  
   return(p)
+  
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # 250714 ----

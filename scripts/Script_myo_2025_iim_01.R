@@ -551,10 +551,10 @@ res_mixMod_type_tab <- res_mixMod_type |>
   arrange(var_indep_name )
 
 
-# export(res_mixMod_type_tab, "output/tables/250714_others_type_01.xlsx")
+# export(res_mixMod_type_tab, "output/tables/250717_others_type_01.xlsx")
 
 ### figures ----
-# pdf("output/figures/250714_others_type_01.pdf")
+# pdf("output/figures/250717_others_type_01.pdf", height = 8, width = 16)
 walk(res_mixMod_type$fig, print)
 # dev.off()
 

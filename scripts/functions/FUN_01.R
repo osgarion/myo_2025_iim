@@ -5,7 +5,8 @@ pacman::p_load(update = T,
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
-               lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer
+               lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer,
+               emmeans
 )
 
 # Missing values, multivariate analyses
@@ -362,6 +363,8 @@ plot_mixed_terms_03 <- function(model,
     pull(p.value) %>% 
     signif(2)
   
+  
+  
   # 4) get ggpredict data
   preds <- ggpredict(
     engine,
@@ -369,8 +372,8 @@ plot_mixed_terms_03 <- function(model,
   )
   
   # 5) build the base plot
-  ct <- emmeans(extract_fit_engine(model), "podtyp_nemoci_zjednoduseny") |> 
-    contrast() |> data.frame()
+  ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
+    contrast(adjust="none") |> data.frame()
   
   preds2 <- ggpredict(
     engine,
@@ -386,8 +389,31 @@ plot_mixed_terms_03 <- function(model,
            p.label = paste0("p = ", signif(p.value, 3))) %>%
     select(group, p.label)
   
+  
+  fml_new <- extract_fit_engine(model)@call$formula |> 
+    deparse() |> 
+    paste(collapse = " ") |> 
+    str_squish() |> 
+    str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
+                "* podtyp_nemoci_zjednoduseny") |> 
+    str_replace("(\\+\\s*)var_indep_value",
+                "* var_indep_value") |>
+    as.formula()
+  
+  data_new <- extract_fit_engine(model)@frame
+  
+  preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
+  
+  predictor2 <- paste0(predictor, " [all]")
+  
+  preds_int <- ggpredict(
+    preds3,
+    terms = c(predictor2, "podtyp_nemoci_zjednoduseny")
+  )   
+  
+  
   # 2) Your base plot
-  p <- plot(preds) +
+  p <- plot(preds_int) +
     geom_point(
       data        = raw_data,
       aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
@@ -407,11 +433,12 @@ plot_mixed_terms_03 <- function(model,
       y      = ylab %||% "Predicted response",
       colour = ""
     ) +
-    theme_minimal(base_size = 14) +
+    theme_minimal(base_size = 18) +
     theme(
-      strip.text       = element_text(face = "bold", size = 12),
-      axis.title       = element_text(face = "bold", size = 14),
-      axis.text        = element_text(size = 12),
+      strip.text       = element_text(face = "bold", size = 22),
+      axis.title       = element_text(face = "bold", size = 22),
+      axis.text        = element_text(size = 21),
+      plot.title       = element_text(face = "bold", size = 25, hjust = 0.5),
       panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
       panel.grid.minor = element_blank()
     )
@@ -423,11 +450,12 @@ plot_mixed_terms_03 <- function(model,
       aes(x = Inf, y = Inf, label = p.label),
       hjust = 1.1,    # nudge left from right edge
       vjust = 1.1,    # nudge down from top
-      size  = 3, 
+      size  = 6, 
       inherit.aes = FALSE
     )
   
   return(p)
+  
 }
 
 # tables ----
