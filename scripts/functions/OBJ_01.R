@@ -94,13 +94,23 @@ d04_sel1 <- d03 |>
     odpoved_na_terapii_m0_vs_m6 =
       str_replace(odpoved_na_terapii_m0_vs_m6, "No Improvement", "No improvement")
   ) |>
-  select(projekt_id, vek, gk, davka_gk_mg_den, podtyp_nemoci_zjednoduseny, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
+  select(projekt_id, pohlavi, vek, gk, davka_gk_mg_den, podtyp_nemoci_zjednoduseny, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
   filter(poradie_vysetrenia %in% c("M0", "M3", "M6", "M18"))
 
 d04_sel1_nested <- d04_sel1 |> 
   # mutate(poradie_vysetrenia = str_remove(poradie_vysetrenia, "M") |> as.numeric()) |>
-  dplyr::select(-odpoved_na_terapii_m0_vs_m6) |> 
-  pivot_longer(cols = any_of(var_dep_01),
+  # mutate(
+  #   odpoved_na_terapii_m0_vs_m6 = recode(
+  #     odpoved_na_terapii_m0_vs_m6,
+  #     "No"             = 0,
+  #     "No improvement" = 1,
+  #     "Minimal"        = 2,
+  #     "Moderate"       = 3,
+  #     "Major"          = 4,
+  #     .default = NA_real_
+  #   )
+  # ) |> 
+  pivot_longer(cols = any_of(var_dep_01 |>  str_subset("^odpoved_na_terapii_m0_vs_m6$", negate = TRUE)),
                names_to = "var_dep_name",
                values_to = "var_dep_value") |> 
   pivot_longer(cols = any_of(var_indep_01),
