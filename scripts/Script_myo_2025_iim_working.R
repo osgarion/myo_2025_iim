@@ -4,7 +4,7 @@ back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
 # 250722 ----
-## others - glucocorticoids dose adjusted ----
+## others - sex and age adjusted ----
 ### model ----
 res_mixMod_age_sex <- d04_sel1_nested |> 
   filter(var_indep_name == "mstn" | !str_detect(var_dep_name, "mmt")) |>
@@ -15,22 +15,22 @@ res_mixMod_age_sex <- d04_sel1_nested |>
                       )),
          mod_raw = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + vek*pohlavi + (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
            data = .x
          )),
          mod_log_10 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + vek*pohlavi + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
            data = .x
          )),
          mod_log_01 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  vek*pohlavi + (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
            data = .x
          )),
          mod_log_11 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl +  vek*pohlavi + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
            data = .x
          )),
          shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
@@ -78,8 +78,8 @@ walk(res_mixMod_age_sex$fig, print)
 # dev.off()
 # 
 
-data <- res_mixMod_age_sex$data[[1]]
-model <- res_mixMod_age_sex$mod_value[[1]]# davka_gk_mg_den
+data <- res_mixMod_type$data[[1]]
+model <- res_mixMod_type$mod_value[[1]]# davka_gk_mg_den
 
 # podtyp nemoci + poradi vysetreni
 plot_mixed_terms_03 <- function(model, 
@@ -125,8 +125,13 @@ plot_mixed_terms_03 <- function(model,
   )
   
   # 5) build the base plot
-  ct <- emmeans(engine, var_indep2) |> 
-    contrast(adjust="none") |> data.frame()
+  fml <- as.formula(paste0("~", var_indep2))
+  
+  ct <- emtrends(engine,
+                 fml,
+              var =predictor) |>
+    summary(infer = c(TRUE, TRUE)) |> 
+    data.frame()
   
   preds2 <- ggpredict(
     engine,
@@ -136,10 +141,11 @@ plot_mixed_terms_03 <- function(model,
   raw_data <- attr(preds2, "rawdata")
   
   # 1) Build a lookup table of p‐values per facet
-  pval_df <- ct %>% 
-    # strip off the common prefix so that it matches your 'group' levels
-    mutate(group = str_extract(contrast, "\\d+"),
-           p.label = paste0("p = ", signif(p.value, 3))) %>%
+  pval_df <- ct %>%
+    mutate(
+      group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
+      p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
+    ) %>%
     select(group, p.label)
   
   
@@ -174,8 +180,8 @@ plot_mixed_terms_03 <- function(model,
       alpha       = 0.3,
       inherit.aes = FALSE
     ) +
-    scale_fill_brewer(palette = "Dark2") +
-    scale_color_brewer(palette = "Dark2") +
+    paletteer::scale_fill_paletteer_d("palettesForR::Cranes") +
+    paletteer::scale_colour_paletteer_d("palettesForR::Cranes") +
     scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
     # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
     # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +

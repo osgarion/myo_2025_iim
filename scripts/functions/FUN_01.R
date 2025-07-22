@@ -333,7 +333,8 @@ plot_mixed_terms_02 <- function(model,
 
 # podtyp nemoci + poradi vysetreni
 plot_mixed_terms_03 <- function(model, 
-                                var_pattern = "var_indep_", 
+                                var_pattern = "var_indep_",
+                                var_indep2 = "podtyp_nemoci_zjednoduseny",
                                 xlab        = NULL, 
                                 ylab        = NULL) {
   # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
@@ -366,56 +367,47 @@ plot_mixed_terms_03 <- function(model,
     signif(2)
   
   
-  
   # 4) get ggpredict data
   preds <- ggpredict(
     engine,
-    terms = c(predictor, "podtyp_nemoci_zjednoduseny")
+    terms = c(predictor, var_indep2)
   )
   
   # 5) build the base plot
-  ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
-    contrast(adjust="none") |> data.frame()
+  fml <- as.formula(paste0("~", var_indep2))
+  
+  ct <- emtrends(engine,
+                 fml,
+                 var =predictor) |>
+    summary(infer = c(TRUE, TRUE)) |> 
+    data.frame()
   
   preds2 <- ggpredict(
     engine,
-    terms = c(predictor, "podtyp_nemoci_zjednoduseny", "poradie_vysetrenia")
+    terms = c(predictor, var_indep2, "poradie_vysetrenia")
   )
   
   raw_data <- attr(preds2, "rawdata")
   
   # 1) Build a lookup table of p‐values per facet
-  pval_df <- ct %>% 
-    # strip off the common prefix so that it matches your 'group' levels
-    mutate(group = str_extract(contrast, "\\d+"),
-           p.label = paste0("p = ", signif(p.value, 3))) %>%
+  pval_df <- ct %>%
+    mutate(
+      group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
+      p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
+    ) %>%
     select(group, p.label)
   
   
-  fml_new <- extract_fit_engine(model)@call$formula |> 
-    deparse() |> 
-    paste(collapse = " ") |> 
-    str_squish() |> 
-    str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
-                "* podtyp_nemoci_zjednoduseny") |> 
-    str_replace("(\\+\\s*)var_indep_value",
-                "* var_indep_value") |>
-    as.formula()
-  
-  data_new <- extract_fit_engine(model)@frame
-  
-  preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
-  
-  predictor2 <- paste0(predictor, " [all]")
-  
-  preds_int <- ggpredict(
-    preds3,
-    terms = c(predictor2, "podtyp_nemoci_zjednoduseny")
-  )   
-  
+  colors_20 <- c(
+    "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+    "#0072B2", "#D55E00", "#CC79A7", "#000000",
+    "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C",
+    "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00",
+    "#CAB2D6", "#6A3D9A", "#FFFF99", "#B15928"
+  )
   
   # 2) Your base plot
-  p <- plot(preds_int) +
+  p <- plot(preds) +
     geom_point(
       data        = raw_data,
       aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
@@ -423,8 +415,8 @@ plot_mixed_terms_03 <- function(model,
       alpha       = 0.3,
       inherit.aes = FALSE
     ) +
-    scale_fill_brewer(palette = "Dark2") +
-    scale_color_brewer(palette = "Dark2") +
+    scale_colour_manual(values = colors_20) +
+    scale_fill_manual(values = colors_20) +
     scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
     # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
     # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +
@@ -459,6 +451,7 @@ plot_mixed_terms_03 <- function(model,
   return(p)
   
 }
+
 # podtyp nemoci + odpoved po 6 mesicich
 plot_mixed_terms_04 <- function(model, 
                                 var_pattern = "var_indep_", 
@@ -503,8 +496,13 @@ plot_mixed_terms_04 <- function(model,
   )
   
   # 5) build the base plot
-  ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
-    contrast(adjust="none") |> data.frame()
+  # ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
+  #   contrast(adjust="none") |> data.frame()
+  ct <- emtrends(engine,
+                 fml,
+                 var =predictor) |>
+    summary(infer = c(TRUE, TRUE)) |> 
+    data.frame()
   
   preds2 <- ggpredict(
     engine,
@@ -514,38 +512,44 @@ plot_mixed_terms_04 <- function(model,
   raw_data <- attr(preds2, "rawdata")
   
   # 1) Build a lookup table of p‐values per facet
-  pval_df <- ct %>% 
-    # strip off the common prefix so that it matches your 'group' levels
-    mutate(group = str_extract(contrast, "\\d+"),
-           p.label = paste0("p = ", signif(p.value, 3))) %>%
+  # pval_df <- ct %>% 
+  #   # strip off the common prefix so that it matches your 'group' levels
+  #   mutate(group = str_extract(contrast, "\\d+"),
+  #          p.label = paste0("p = ", signif(p.value, 3))) %>%
+  #   select(group, p.label)
+  pval_df <- ct %>%
+    mutate(
+      group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
+      p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
+    ) %>%
     select(group, p.label)
   
   
-  fml_new <- extract_fit_engine(model)@call$formula |> 
-    deparse() |> 
-    paste(collapse = " ") |> 
-    str_squish() |> 
-    str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
-                "* podtyp_nemoci_zjednoduseny") |> 
-    str_replace("(\\+\\s*)var_indep_value",
-                "* var_indep_value") |>
-    as.formula()
-  
+  # fml_new <- extract_fit_engine(model)@call$formula |> 
+  #   deparse() |> 
+  #   paste(collapse = " ") |> 
+  #   str_squish() |> 
+  #   str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
+  #               "* podtyp_nemoci_zjednoduseny") |> 
+  #   str_replace("(\\+\\s*)var_indep_value",
+  #               "* var_indep_value") |>
+  #   as.formula()
+  # 
   data_new <- data
-  
-  preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
-  
-  predictor2 <- paste0(predictor, " [all]")
-  
-  preds_int <- ggpredict(
-    preds3,
-    terms = c(predictor2, "podtyp_nemoci_zjednoduseny")
-  )   
+  # 
+  # preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
+  # 
+  # predictor2 <- paste0(predictor, " [all]")
+  # 
+  # preds_int <- ggpredict(
+  #   preds3,
+  #   terms = c(predictor2, "podtyp_nemoci_zjednoduseny")
+  # )   
   
   dep_var <- deparse(fml_new)[1] |> str_extract("^[^ ]+")
   
   # 2) Your base plot
-  p <- plot(preds_int) +
+  p <- plot(preds) +
     geom_point(
       data = data_new,
       aes(x = !!sym(predictor), 
