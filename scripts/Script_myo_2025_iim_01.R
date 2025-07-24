@@ -496,22 +496,22 @@ res_mixMod_type <- d04_sel1_nested |>
                       )),
          mod_raw = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          mod_log_10 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          mod_log_01 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci_zjednoduseny +  (1 | projekt_id),
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl*podtyp_nemoci_zjednoduseny +  (1 | projekt_id),
            data = .x
          )),
          mod_log_11 = map(data, ~ fit(
            lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl + podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
            data = .x
          )),
          shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
@@ -546,23 +546,23 @@ res_mixMod_type <- res_mixMod_type |>
 ### table ----
 res_mixMod_type_tab <- res_mixMod_type |> 
   unnest(tidier) |> 
-  filter(str_detect(term, "var_indep_")) |> 
-  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+  filter(str_detect(term, "var_indep_") & !str_detect(term, ":")) |>
+  select(var_indep_name, var_dep_name, mod_name, term, estimate, p.value,
          conf.low, conf.high,  shap_value) |> 
   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
   arrange(var_indep_name )
 
 
-# export(res_mixMod_type_tab, "output/tables/250717_others_type_01.xlsx")
+# export(res_mixMod_type_tab, "output/tables/250722_others_type_01.xlsx")
 
 ### figures ----
 # podtyp nemoci + poradi vysetreni
-# pdf("output/figures/250717_others_type_01.pdf", height = 8, width = 16)
+# pdf("output/figures/250722_others_type_01.pdf", height = 8, width = 16)
 walk(res_mixMod_type$fig, print)
 # dev.off()
 
 #podtyp nemoci + odpoved po 6 mesicic
-# pdf("output/figures/250717_others_type_02.pdf", height = 8, width = 16)
+# pdf("output/figures/250722_others_type_02.pdf", height = 8, width = 16)
 safe_print <- possibly(print, otherwise = NULL)
 walk(res_mixMod_type$fig2, ~ safe_print(.x))
 # dev.off()
@@ -714,4 +714,77 @@ res_mixMod_gk_dose_tab <- res_mixMod_gk_dose |>
 # pdf("output/figures/250722_others_gk_dose_01.pdf")
 walk(res_mixMod_gk_dose$fig, print)
 # dev.off()
+
+## others - sex and age adjusted ----
+### model ----
+res_mixMod_age_sex <- d04_sel1_nested |> 
+  filter(var_indep_name == "mstn" & !str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             gk = factor(gk)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_age_sex <- res_mixMod_age_sex |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_age_sex |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3, var_indep2 = "pohlavi"))) 
+
+
+### table ----
+res_mixMod_age_sex_tab <- res_mixMod_age_sex |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_") & !str_detect(term, ":")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name)
+
+
+export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
+
+### figures ----
+pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
+walk(res_mixMod_age_sex$fig, print)
+dev.off()
 

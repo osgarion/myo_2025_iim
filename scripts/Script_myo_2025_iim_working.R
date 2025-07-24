@@ -3,90 +3,20 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
-# 250722 ----
-## others - glucocorticoids dose adjusted ----
-### model ----
-res_mixMod_age_sex <- d04_sel1_nested |> 
-  filter(var_indep_name == "mstn" | !str_detect(var_dep_name, "mmt")) |>
-  mutate(data = map(data, ~ .x |> 
-                      mutate(var_indep_value_scl = log(var_indep_value + 1),
-                             var_dep_value_scl = log(var_dep_value + 1),
-                             gk = factor(gk)
-                      )),
-         mod_raw = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + vek*pohlavi + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_10 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + vek*pohlavi + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_01 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  vek*pohlavi + (1 | projekt_id),
-           data = .x
-         )),
-         mod_log_11 = map(data, ~ fit(
-           lmer_mod,
-           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl +  vek*pohlavi + (1 | projekt_id),
-           data = .x
-         )),
-         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
-         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
-  )
-
-res_mixMod_age_sex <- res_mixMod_age_sex |> 
-  select(-contains("shap")) |> 
-  pivot_longer(cols = contains("mod"),
-               names_to = "mod_name",
-               values_to = "mod_value") |> 
-  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
-  left_join(res_mixMod_age_sex |> 
-              select(-contains("mod_"), -data) |> 
-              pivot_longer(cols = contains("shap"),
-                           names_to = "shap_name",
-                           values_to = "shap_value") |>
-              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
-            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
-  group_by(var_indep_name, var_dep_name) |> 
-  slice_max(shap_value, n = 1) |> 
-  ungroup() |> 
-  mutate(tidier = map(mod_value, lmer_tidier),
-         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
-                    ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3, var_indep2 = "pohlavi"))) 
+# 250723 ----
+data <- res_mixMod_type$data[[2]]
+model <- res_mixMod_type$mod_value[[2]]# davka_gk_mg_den
 
 
-### table ----
-res_mixMod_age_sex_tab <- res_mixMod_age_sex |> 
-  unnest(tidier) |> 
-  filter(str_detect(term, "var_indep_")) |> 
-  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
-         conf.low, conf.high,  shap_value) |> 
-  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
-  arrange(var_indep_name)
+plot_mixed_terms_03(model = model, xlab = "test1", ylab = "test2")
+plot_mixed_terms_04(model = model, xlab = "test1", ylab = "test2", data = data)
 
-
-# export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
-
-### figures ----
-# pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
-walk(res_mixMod_age_sex$fig, print)
-# dev.off()
-# 
-
-data <- res_mixMod_age_sex$data[[1]]
-model <- res_mixMod_age_sex$mod_value[[1]]# davka_gk_mg_den
-
-# podtyp nemoci + poradi vysetreni
-plot_mixed_terms_03 <- function(model, 
-                                var_pattern = "var_indep_",
+plot_mixed_terms_04 <- function(model, 
+                                var_pattern = "var_indep_", 
                                 var_indep2 = "podtyp_nemoci_zjednoduseny",
                                 xlab        = NULL, 
-                                ylab        = NULL) {
+                                ylab        = NULL,
+                                data        = data) {
   # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
   # var_pattern  : regex/substring to match raw vs scaled predictor
   # xlab, ylab   : axis labels; NULL will default to the matched term / "Predicted response"
@@ -121,62 +51,62 @@ plot_mixed_terms_03 <- function(model,
   # 4) get ggpredict data
   preds <- ggpredict(
     engine,
-    terms = c(predictor, var_indep2)
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny")
   )
   
   # 5) build the base plot
-  ct <- emmeans(engine, var_indep2) |> 
-    contrast(adjust="none") |> data.frame()
+  # ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
+  #   contrast(adjust="none") |> data.frame()
+  
+  fml <- as.formula(paste0("~", var_indep2))
+  
+  ct <- emtrends(engine,
+                 fml,
+                 var =predictor) |>
+    summary(infer = c(TRUE, TRUE)) |> 
+    data.frame()
   
   preds2 <- ggpredict(
     engine,
-    terms = c(predictor, var_indep2, "poradie_vysetrenia")
+    terms = c(predictor, "podtyp_nemoci_zjednoduseny", "poradie_vysetrenia")
   )
   
   raw_data <- attr(preds2, "rawdata")
-  
-  # 1) Build a lookup table of p‐values per facet
-  pval_df <- ct %>% 
-    # strip off the common prefix so that it matches your 'group' levels
-    mutate(group = str_extract(contrast, "\\d+"),
-           p.label = paste0("p = ", signif(p.value, 3))) %>%
+
+  pval_df <- ct %>%
+    mutate(
+      group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
+      p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
+    ) %>%
     select(group, p.label)
   
+  data_new <- data
+  dep_var <- deparse(extract_fit_engine(model)@call$formula)[1] |> 
+    str_extract("^[^ ]+")
+
+  colors_20 <- c(
+    "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+    "#0072B2", "#D55E00", "#CC79A7", "#000000",
+    "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C",
+    "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00",
+    "#CAB2D6", "#6A3D9A", "#FFFF99", "#B15928"
+  )
   
-  fml_new <- extract_fit_engine(model)@call$formula |> 
-    deparse() |> 
-    paste(collapse = " ") |> 
-    str_squish() |> 
-    str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
-                "* podtyp_nemoci_zjednoduseny") |> 
-    str_replace("(\\+\\s*)var_indep_value",
-                "* var_indep_value") |>
-    as.formula()
-  
-  data_new <- extract_fit_engine(model)@frame
-  
-  preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
-  
-  predictor2 <- paste0(predictor, " [all]")
-  
-  preds_int <- ggpredict(
-    preds3,
-    terms = c(predictor2, var_indep2)
-  )   
-  
-  
-  # 2) Your base plot
-  p <- plot(preds_int) +
+  p <- plot(preds) +
     geom_point(
-      data        = raw_data,
-      aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
+      data = data_new,
+      aes(x = !!sym(predictor), 
+          y = !!sym(dep_var), 
+          colour = odpoved_na_terapii_m0_vs_m6, 
+          fill = odpoved_na_terapii_m0_vs_m6, 
+          shape = odpoved_na_terapii_m0_vs_m6),
       size = 3,
       alpha       = 0.3,
       inherit.aes = FALSE
     ) +
-    scale_fill_brewer(palette = "Dark2") +
-    scale_color_brewer(palette = "Dark2") +
-    scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
+    scale_colour_manual(values = colors_20) +
+    scale_fill_manual(values = colors_20) +
+    scale_shape_manual(values = c(21, 22, 23, 24, 25,21, 22, 23, 24, 25), name = "Examination") +
     # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
     # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +
     facet_wrap(~ group, scales = "free_y") +
@@ -213,6 +143,223 @@ plot_mixed_terms_03 <- function(model,
 
 
 
+
+# 250722 ----
+## others - sex and age adjusted ----
+### model ----
+# res_mixMod_age_sex <- d04_sel1_nested |> 
+#   filter(var_indep_name == "mstn" | !str_detect(var_dep_name, "mmt")) |>
+#   mutate(data = map(data, ~ .x |> 
+#                       mutate(var_indep_value_scl = log(var_indep_value + 1),
+#                              var_dep_value_scl = log(var_dep_value + 1),
+#                              gk = factor(gk)
+#                       )),
+#          mod_raw = map(data, ~ fit(
+#            lmer_mod,
+#            formula = var_dep_value ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
+#            data = .x
+#          )),
+#          mod_log_10 = map(data, ~ fit(
+#            lmer_mod,
+#            formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value*vek*pohlavi + (1 | projekt_id),
+#            data = .x
+#          )),
+#          mod_log_01 = map(data, ~ fit(
+#            lmer_mod,
+#            formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
+#            data = .x
+#          )),
+#          mod_log_11 = map(data, ~ fit(
+#            lmer_mod,
+#            formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl*vek*pohlavi + (1 | projekt_id),
+#            data = .x
+#          )),
+#          shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+#          shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+#          shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+#          shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+#   )
+# 
+# res_mixMod_age_sex <- res_mixMod_age_sex |> 
+#   select(-contains("shap")) |> 
+#   pivot_longer(cols = contains("mod"),
+#                names_to = "mod_name",
+#                values_to = "mod_value") |> 
+#   mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+#   left_join(res_mixMod_age_sex |> 
+#               select(-contains("mod_"), -data) |> 
+#               pivot_longer(cols = contains("shap"),
+#                            names_to = "shap_name",
+#                            values_to = "shap_value") |>
+#               mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+#             by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+#   group_by(var_indep_name, var_dep_name) |> 
+#   slice_max(shap_value, n = 1) |> 
+#   ungroup() |> 
+#   mutate(tidier = map(mod_value, lmer_tidier),
+#          fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+#                     ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3, var_indep2 = "pohlavi"))) 
+# 
+# 
+# ### table ----
+# res_mixMod_age_sex_tab <- res_mixMod_age_sex |> 
+#   unnest(tidier) |> 
+#   filter(str_detect(term, "var_indep_")) |> 
+#   select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+#          conf.low, conf.high,  shap_value) |> 
+#   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+#   arrange(var_indep_name)
+# 
+# 
+# # export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
+# 
+# ### figures ----
+# # pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
+# walk(res_mixMod_age_sex$fig, print)
+# # dev.off()
+# # 
+# 
+# data <- res_mixMod_type$data[[1]]
+# model <- res_mixMod_type$mod_value[[1]]# davka_gk_mg_den
+# 
+# # podtyp nemoci + poradi vysetreni
+# plot_mixed_terms_03 <- function(model, 
+#                                 var_pattern = "var_indep_",
+#                                 var_indep2 = "podtyp_nemoci_zjednoduseny",
+#                                 xlab        = NULL, 
+#                                 ylab        = NULL) {
+#   # model        : a parsnip model_fit (with $fit = lmerMod) or a bare lmerMod
+#   # var_pattern  : regex/substring to match raw vs scaled predictor
+#   # xlab, ylab   : axis labels; NULL will default to the matched term / "Predicted response"
+#   
+#   library(ggeffects)
+#   library(ggplot2)
+#   library(broom.mixed)
+#   library(lmerTest)
+#   
+#   # 1) pull out the lmerMod
+#   engine <- if (inherits(model, "model_fit")) model$fit else model
+#   
+#   # 2) find the exact fixed‐effect term(s)
+#   fe      <- broom.mixed::tidy(as_lmerModLmerTest(engine), effects = "fixed")
+#   matches <- grep(var_pattern, fe$term, value = TRUE)
+#   if (length(matches) == 0) {
+#     stop("No fixed-effect term matches: ", var_pattern)
+#   }
+#   # prefer the scaled variant if present:
+#   predictor <- if ("var_indep_value_scl" %in% matches) {
+#     "var_indep_value_scl"
+#   } else matches[1]
+#   
+#   # 3) extract its p-value
+#   pval <- fe %>% 
+#     filter(term == predictor) %>% 
+#     pull(p.value) %>% 
+#     signif(2)
+#   
+#   
+#   
+#   # 4) get ggpredict data
+#   preds <- ggpredict(
+#     engine,
+#     terms = c(predictor, var_indep2)
+#   )
+#   
+#   # 5) build the base plot
+#   fml <- as.formula(paste0("~", var_indep2))
+#   
+#   ct <- emtrends(engine,
+#                  fml,
+#               var =predictor) |>
+#     summary(infer = c(TRUE, TRUE)) |> 
+#     data.frame()
+#   
+#   preds2 <- ggpredict(
+#     engine,
+#     terms = c(predictor, var_indep2, "poradie_vysetrenia")
+#   )
+#   
+#   raw_data <- attr(preds2, "rawdata")
+#   
+#   # 1) Build a lookup table of p‐values per facet
+#   pval_df <- ct %>%
+#     mutate(
+#       group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
+#       p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
+#     ) %>%
+#     select(group, p.label)
+#   
+#   
+#   fml_new <- extract_fit_engine(model)@call$formula |> 
+#     deparse() |> 
+#     paste(collapse = " ") |> 
+#     str_squish() |> 
+#     str_replace("(\\+\\s*)podtyp_nemoci_zjednoduseny",
+#                 "* podtyp_nemoci_zjednoduseny") |> 
+#     str_replace("(\\+\\s*)var_indep_value",
+#                 "* var_indep_value") |>
+#     as.formula()
+#   
+#   data_new <- extract_fit_engine(model)@frame
+#   
+#   preds3 <- fit(lmer_mod, formula = fml_new, data = data_new)
+#   
+#   predictor2 <- paste0(predictor, " [all]")
+#   
+#   preds_int <- ggpredict(
+#     preds3,
+#     terms = c(predictor2, var_indep2)
+#   )   
+#   
+#   
+#   # 2) Your base plot
+#   p <- plot(preds_int) +
+#     geom_point(
+#       data        = raw_data,
+#       aes(x = x, y = response, colour = facet, fill = facet, shape = facet),
+#       size = 3,
+#       alpha       = 0.3,
+#       inherit.aes = FALSE
+#     ) +
+#     paletteer::scale_fill_paletteer_d("palettesForR::Cranes") +
+#     paletteer::scale_colour_paletteer_d("palettesForR::Cranes") +
+#     scale_shape_manual(values = c(21, 22, 23, 25,21, 22, 23, 25), name = "Examination") +
+#     # paletteer::scale_colour_paletteer_d("tvthemes::Steven") +
+#     # paletteer::scale_fill_paletteer_d("tvthemes::Steven") +
+#     facet_wrap(~ group, scales = "free_y") +
+#     labs(
+#       title  = paste0("p-value = ", pval),
+#       x      = xlab %||% predictor,
+#       y      = ylab %||% "Predicted response",
+#       colour = ""
+#     ) +
+#     theme_minimal(base_size = 18) +
+#     theme(
+#       strip.text       = element_text(face = "bold", size = 22),
+#       axis.title       = element_text(face = "bold", size = 22),
+#       axis.text        = element_text(size = 21),
+#       plot.title       = element_text(face = "bold", size = 25, hjust = 0.5),
+#       panel.grid.major = element_line(color = "grey80", linetype = "dotted"),
+#       panel.grid.minor = element_blank()
+#     )
+#   
+#   # 3) Add a geom_text layer to annotate each facet
+#   p <- p + 
+#     geom_text(
+#       data = pval_df,
+#       aes(x = Inf, y = Inf, label = p.label),
+#       hjust = 1.1,    # nudge left from right edge
+#       vjust = 1.1,    # nudge down from top
+#       size  = 6, 
+#       inherit.aes = FALSE
+#     )
+#   
+#   return(p)
+#   
+# }
+# 
+# 
+# 
 
 # data <- res_mixMod_type$data[[1]]
 # model <- data_test <- res_mixMod_type$mod_value[[1]]
