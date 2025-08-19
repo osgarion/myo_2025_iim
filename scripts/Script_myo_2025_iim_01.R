@@ -255,13 +255,13 @@ eda_05 <- d04_sel1 |>
 res_mixMod_mmt <-  d04_sel1_nested |> 
   filter(str_detect(var_dep_name, "mmt8")) |> 
   mutate(mod = map(data, ~possmixMODmmt(.x, upper = 80)),
-         tidier = map(mod, tidy),
+         tidier = map(mod, broom.mixed::tidy),
          fig = pmap(list(data, mod, var_indep_name, var_dep_name, upper = 80),fig_mixMODmmt)
   ) |> 
   bind_rows(d04_sel1_nested |> 
               filter(str_detect(var_dep_name, "mmt10")) |> 
               mutate(mod = map(data, ~possmixMODmmt(.x, upper = 100)),
-                     tidier = map(mod, tidy),
+                     tidier = map(mod, broom.mixed::tidy),
                      fig = pmap(list(data, mod, var_indep_name, var_dep_name, upper = 100),fig_mixMODmmt)
               ))
 
@@ -274,10 +274,10 @@ data_set <- prepare_for_censored_model(d04_sel1_nested$data[[5]],
                                        upper = 100
 )
 
-data_mod <- mixed_model(
+data_mod <- GLMMadaptive::mixed_model(
   fixed  = cbind(y_capped, ind) ~ poradie_vysetrenia + var_indep_value_scl,
   random = ~ 1 | projekt_id,
-  family = censored.normal(),
+  family = GLMMadaptive::censored.normal(),
   data   = data_set
 )
 # data for mmt_10 and mstn analyses has to be specific for this analysis 
@@ -557,15 +557,15 @@ res_mixMod_type_tab <- res_mixMod_type |>
 
 ### figures ----
 # podtyp nemoci + poradi vysetreni
-# pdf("output/figures/250722_others_type_01.pdf", height = 8, width = 16)
+pdf("output/figures/250722_others_type_01.pdf", height = 8, width = 16)
 walk(res_mixMod_type$fig, print)
-# dev.off()
+dev.off()
 
 #podtyp nemoci + odpoved po 6 mesicic
-# pdf("output/figures/250722_others_type_02.pdf", height = 8, width = 16)
+pdf("output/figures/250722_others_type_02.pdf", height = 8, width = 16)
 safe_print <- possibly(print, otherwise = NULL)
 walk(res_mixMod_type$fig2, ~ safe_print(.x))
-# dev.off()
+dev.off()
 
 ## others - glucocorticoids adjusted ----
 ### model ----
@@ -718,7 +718,7 @@ walk(res_mixMod_gk_dose$fig, print)
 ## others - sex and age adjusted ----
 ### model ----
 res_mixMod_age_sex <- d04_sel1_nested |> 
-  filter(var_indep_name == "mstn" & !str_detect(var_dep_name, "mmt")) |>
+  filter(var_indep_name == "mstn" | !str_detect(var_dep_name, "mmt")) |>
   mutate(data = map(data, ~ .x |> 
                       mutate(var_indep_value_scl = log(var_indep_value + 1),
                              var_dep_value_scl = log(var_dep_value + 1),
@@ -774,17 +774,19 @@ res_mixMod_age_sex <- res_mixMod_age_sex |>
 ### table ----
 res_mixMod_age_sex_tab <- res_mixMod_age_sex |> 
   unnest(tidier) |> 
-  filter(str_detect(term, "var_indep_") & !str_detect(term, ":")) |> 
+  filter(str_detect(term, "var_indep_")) |> 
   select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
          conf.low, conf.high,  shap_value) |> 
   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
   arrange(var_indep_name)
 
 
-export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
+
+# export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
 
 ### figures ----
-pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
+# pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
 walk(res_mixMod_age_sex$fig, print)
-dev.off()
+# dev.off()
+
 

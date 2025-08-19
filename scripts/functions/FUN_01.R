@@ -6,7 +6,7 @@ pacman::p_load(update = T,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
                lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer,
-               emmeans, openxlsx
+               emmeans, openxlsx, GLMMadaptive
 )
 
 # Missing values, multivariate analyses
@@ -468,6 +468,15 @@ plot_mixed_terms_04 <- function(model,
   library(broom.mixed)
   library(lmerTest)
   
+  colors_20 <- c(
+    "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+    "#0072B2", "#D55E00", "#CC79A7", "#000000",
+    "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C",
+    "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00",
+    "#CAB2D6", "#6A3D9A", "#FFFF99", "#B15928"
+  )
+  
+  
   # 1) pull out the lmerMod
   engine <- if (inherits(model, "model_fit")) model$fit else model
   
@@ -500,6 +509,7 @@ plot_mixed_terms_04 <- function(model,
   # ct <- emmeans(engine, "podtyp_nemoci_zjednoduseny") |> 
   #   contrast(adjust="none") |> data.frame()
   
+  
   fml <- as.formula(paste0("~", var_indep2))
   
   ct <- emtrends(engine,
@@ -515,25 +525,21 @@ plot_mixed_terms_04 <- function(model,
   
   raw_data <- attr(preds2, "rawdata")
   
-  pval_df <- ct %>%
+  
+  # 1) Build a lookup table of p‐values per facet
+  pval_df <- ct  |> 
     mutate(
-      group   = as.character(.data[[var_indep2]]),         # vezmeme hodnoty ve sloupci "pohlavi"
-      p.label = paste0("p = ", signif(p.value, 3))         # naformátujeme p‑hodnotu
-    ) %>%
+      group   = as.character(.data[[var_indep2]]),         
+      p.label = paste0("p = ", signif(p.value, 3))         
+    )  |> 
     select(group, p.label)
+  
   
   data_new <- data
   dep_var <- deparse(extract_fit_engine(model)@call$formula)[1] |> 
     str_extract("^[^ ]+")
   
-  colors_20 <- c(
-    "#E69F00", "#56B4E9", "#009E73", "#F0E442",
-    "#0072B2", "#D55E00", "#CC79A7", "#000000",
-    "#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C",
-    "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00",
-    "#CAB2D6", "#6A3D9A", "#FFFF99", "#B15928"
-  )
-  
+  # 2) Your base plot
   p <- plot(preds) +
     geom_point(
       data = data_new,
@@ -582,6 +588,7 @@ plot_mixed_terms_04 <- function(model,
   return(p)
   
 }
+
 # tables ----
 ## column with 0, 1, and NA ----
 is_01_col <- function(x) {
