@@ -124,6 +124,17 @@ ggpairs(cor_data,
         lower = list(continuous = my_fn, method = "kendall")) +
   theme_sjplot2()
 
+eda_07 <- d03 |>
+  select(all_of(var_indep_01), podtyp_nemoci_zjednoduseny) |>
+  filter(!is.na(podtyp_nemoci_zjednoduseny)) |>
+  ggpairs(ggplot2::aes(colour=podtyp_nemoci_zjednoduseny),
+          lower = list(continuous = wrap(lowerFn, method = "lm")))
+
+pdf("output/figures/250820_corr_indep_01.pdf")
+print(eda_07)
+dev.off()
+
+
 ### selected variable ----
 eda_06 <- d04_sel1 |> 
   select(!contains("mmt"), -projekt_id) |> 
@@ -245,8 +256,25 @@ eda_05 <- d04_sel1 |>
   geom_boxplot() +
   facet_wrap(~param_name, scales = "free")
 
+## podtyp across periods ----
+eda_period_type_01 <- d04_sel1_nested |> 
+  ungroup() |> 
+  mutate(fig = pmap(list(data, var_indep_name, var_dep_name),
+                    ~plot_period_type_01(data=..1, xlab=..2, ylab=..3)))
 
+# pdf("output/figures/250820_podtyp_period_01.pdf")
+# walk(eda_period_type_01$fig, print)
+# dev.off()
 
+## lmer overview ----
+eda_lmer_overview_01 <- d04_sel1_nested |> 
+  ungroup() |> 
+  mutate(fig = pmap(list(data, var_indep_name, var_dep_name),
+                    ~plot_lmer_grid_basic_01(data=..1, xlab=..2, ylab=..3)))
+
+# pdf("output/figures/250820_lmer_overview_01.pdf", width = 14)
+walk(eda_lmer_overview_01$fig, print)
+# dev.off()
 
 # Statistics ----
 ## mmt -----
@@ -336,7 +364,7 @@ res_mixMod_mmt_tab |>
                 full_width = FALSE) |> 
   collapse_rows(1, valign = "top") 
 
-## others - without adjustment ----
+## features without adjustment ----
 ### model ----
 res_mixMod_raw <- d04_sel1_nested |> 
   # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
@@ -403,15 +431,17 @@ res_mixMod_raw_tab <- res_mixMod_raw |>
 
 
 # export(res_mixMod_raw_tab, "output/tables/250714_others_raw_01.xlsx")
+export(res_mixMod_raw_tab, "output/tables/250820_others_raw_01.xlsx")
 
 ### figures ----
-pdf("output/figures/250714_others_raw_01.pdf")
+# pdf("output/figures/250714_others_raw_01.pdf")
 walk(res_mixMod_raw$fig, print)
-dev.off()
+# dev.off()
 
 
-## others - age adjusted ----
-### model ----
+## feature adjustment ----
+### age ----
+#### model ----
 res_mixMod_vek <- d04_sel1_nested |> 
   # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
   filter(!str_detect(var_dep_name, "mmt")) |>
@@ -466,7 +496,7 @@ res_mixMod_vek <- res_mixMod_vek |>
                     ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
 
 
-### table ----
+#### table ----
 res_mixMod_vek_tab <- res_mixMod_vek |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep_")) |> 
@@ -477,15 +507,17 @@ res_mixMod_vek_tab <- res_mixMod_vek |>
 
 
 # export(res_mixMod_vek_tab, "output/tables/250714_others_vek_01.xlsx")
+export(res_mixMod_vek_tab, "output/tables/250820_others_vek_01.xlsx")
 
-### figures ----
+#### figures ----
 # pdf("output/figures/250714_others_vek_01.pdf")
+pdf("output/figures/250820_others_vek_01.pdf")
 walk(res_mixMod_vek$fig, print)
-# dev.off()
+dev.off()
 
 
-## others - podnemoc adjusted ----
-### model ----
+### podnemoc ----
+#### model ----
 res_mixMod_type <- d04_sel1_nested |> 
   # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
   filter(!str_detect(var_dep_name, "mmt")) |>
@@ -543,7 +575,7 @@ res_mixMod_type <- res_mixMod_type |>
                     ~plot_mixed_terms_04(model = ..1, xlab = ..2, ylab = ..3, data = ..4))) 
 
 
-### table ----
+#### table ----
 res_mixMod_type_tab <- res_mixMod_type |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep_") & !str_detect(term, ":")) |>
@@ -552,23 +584,190 @@ res_mixMod_type_tab <- res_mixMod_type |>
   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
   arrange(var_indep_name )
 
-
 # export(res_mixMod_type_tab, "output/tables/250722_others_type_01.xlsx")
+export(res_mixMod_type_tab, "output/tables/250820_others_type_01.xlsx")
 
-### figures ----
+#### figures ----
 # podtyp nemoci + poradi vysetreni
-pdf("output/figures/250722_others_type_01.pdf", height = 8, width = 16)
+# pdf("output/figures/250722_others_type_01.pdf", height = 8, width = 16)
+pdf("output/figures/250820_others_type_01.pdf", height = 8, width = 16)
 walk(res_mixMod_type$fig, print)
 dev.off()
 
 #podtyp nemoci + odpoved po 6 mesicic
-pdf("output/figures/250722_others_type_02.pdf", height = 8, width = 16)
+# pdf("output/figures/250722_others_type_02.pdf", height = 8, width = 16)
+pdf("output/figures/250820_others_type_02.pdf", height = 8, width = 16)
 safe_print <- possibly(print, otherwise = NULL)
 walk(res_mixMod_type$fig2, ~ safe_print(.x))
 dev.off()
 
-## others - glucocorticoids adjusted ----
-### model ----
+### podnemoc - simple ----
+res_mixMod_type_simple <- d04_sel1_nested |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             podtyp_nemoci_zjednoduseny = factor(podtyp_nemoci_zjednoduseny)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl*podtyp_nemoci_zjednoduseny +  (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl*podtyp_nemoci_zjednoduseny + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_type_simple <- res_mixMod_type_simple |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_type_simple |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3)),
+         fig2 = pmap(list(mod_value, var_indep_name,var_dep_name, data), 
+                     ~plot_mixed_terms_04(model = ..1, xlab = ..2, ylab = ..3, data = ..4))) 
+
+
+#### table ----
+res_mixMod_type_simple_tab <- res_mixMod_type_simple |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_") & !str_detect(term, ":")) |>
+  select(var_indep_name, var_dep_name, mod_name, term, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+export(res_mixMod_type_simple_tab, "output/tables/250819_others_type_simple_01.xlsx")
+
+
+#### figures ----
+# podtyp nemoci + poradi vysetreni
+pdf("output/figures/250819_others_type_simple_01.pdf", height = 8, width = 16)
+walk(res_mixMod_type_simple$fig, print)
+dev.off()
+
+#podtyp nemoci + odpoved po 6 mesicic
+pdf("output/figures/250819_others_type_simple_02.pdf", height = 8, width = 16)
+safe_print <- possibly(print, otherwise = NULL)
+walk(res_mixMod_type_simple$fig2, ~ safe_print(.x))
+dev.off()
+
+### mstn-nomr podnemoc - simple ----
+#### model ----
+res_mixMod_mstnNorm_type_simple <- d06_norm_merge_nest |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             gk = factor(gk)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value_scl + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value_scl + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_mstnNorm_type_simple <- res_mixMod_mstnNorm_type_simple |>
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_mstnNorm_type_simple |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_05(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+#### table ----
+res_mixMod_mstnNorm_type_simple_tab <- res_mixMod_mstnNorm_type_simple |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+# export(res_mixMod_mstnNorm_type_simple_tab, "output/tables/250722_others_mstnNorm_type_simple_01.xlsx")
+export(res_mixMod_mstnNorm_type_simple_tab, "output/tables/250820_others_mstnNorm_type_simple_01.xlsx")
+
+
+
+#### figures ----
+# podtyp nemoci + poradi vysetreni
+pdf("output/figures/250819_others_mstnNorm_type_simple_01.pdf", height = 8, width = 16)
+walk(res_mixMod_mstnNorm_type_simple$fig, print)
+dev.off()
+
+#podtyp nemoci + odpoved po 6 mesicic
+pdf("output/figures/250819_others_mstnNorm_type_simple_02.pdf", height = 8, width = 16)
+safe_print <- possibly(print, otherwise = NULL)
+walk(res_mixMod_mstnNorm_type_simple$fig2, ~ safe_print(.x))
+dev.off()
+
+### glucocorticoids ----
+#### model ----
 res_mixMod_gk <- d04_sel1_nested |> 
   # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
   filter(!str_detect(var_dep_name, "mmt")) |>
@@ -624,8 +823,8 @@ res_mixMod_gk <- res_mixMod_gk |>
                     ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
 
 
-### table ----
-res_mixMod_gk_tab <- res_mixMod_gk_dose |> 
+#### table ----
+res_mixMod_gk_tab <- res_mixMod_gk |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep_")) |> 
   select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
@@ -635,14 +834,16 @@ res_mixMod_gk_tab <- res_mixMod_gk_dose |>
 
 
 # export(res_mixMod_gk_tab, "output/tables/250714_others_gk_01.xlsx")
+export(res_mixMod_gk_tab, "output/tables/250820_others_gk_01.xlsx")
 
-### figures ----
+#### figures ----
 # pdf("output/figures/250714_others_gk_01.pdf")
+pdf("output/figures/250820_others_gk_01.pdf")
 walk(res_mixMod_gk$fig, print)
-# dev.off()
+dev.off()
 
-## others - glucocorticoids dose adjusted ----
-### model ----
+### glucocorticoids dose ----
+#### model ----
 res_mixMod_gk_dose <- d04_sel1_nested |> 
   # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
   filter(!str_detect(var_dep_name, "mmt")) |>
@@ -698,7 +899,7 @@ res_mixMod_gk_dose <- res_mixMod_gk_dose |>
                     ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
 
 
-### table ----
+#### table ----
 res_mixMod_gk_dose_tab <- res_mixMod_gk_dose |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep_")) |> 
@@ -707,16 +908,261 @@ res_mixMod_gk_dose_tab <- res_mixMod_gk_dose |>
   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
   arrange(var_indep_name )
 
-
 # export(res_mixMod_gk_dose_tab, "output/tables/250722_others_gk_dose_01.xlsx")
+export(res_mixMod_gk_dose_tab, "output/tables/250820_others_gk_dose_01.xlsx")
 
-### figures ----
+
+
+#### figures ----
 # pdf("output/figures/250722_others_gk_dose_01.pdf")
+pdf("output/figures/250820_others_gk_dose_01.pdf")
 walk(res_mixMod_gk_dose$fig, print)
-# dev.off()
+dev.off()
 
-## others - sex and age adjusted ----
-### model ----
+###  glucocorticoids to bw dose ----
+#### model ----
+res_mixMod_gk_bw_dose <- d04_sel1_nested |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             gk = factor(gk)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + denna_davka_gk_mg_kg_bw + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value + denna_davka_gk_mg_kg_bw + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ poradie_vysetrenia + var_indep_value_scl +  denna_davka_gk_mg_kg_bw + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ poradie_vysetrenia + var_indep_value_scl +  denna_davka_gk_mg_kg_bw + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_gk_bw_dose <- res_mixMod_gk_bw_dose |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_gk_bw_dose |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_01(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+#### table ----
+res_mixMod_gk_bw_dose_tab <- res_mixMod_gk_bw_dose |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_|denna_davka")) |>
+  # select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+  #        conf.low, conf.high,  shap_value) |>
+  select(var_indep_name, var_dep_name, term, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |>
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+export(res_mixMod_gk_bw_dose_tab, "output/tables/250819_others_gk_bw_dose_01.xlsx")
+
+#### figures ----
+pdf("output/figures/250819_others_gk_bw_dose_01.pdf")
+walk(res_mixMod_gk_bw_dose$fig, print)
+dev.off()
+
+### mstn-nomr glucocorticoids dose ----
+#### model ----
+res_mixMod_mstnNorm_gk_dose <- d06_norm_merge_nest |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             gk = factor(gk)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value_scl + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value_scl + poradie_vysetrenia + davka_gk_mg_den + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_mstnNorm_gk_dose <- res_mixMod_mstnNorm_gk_dose |>
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_mstnNorm_gk_dose |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_05(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+#### table ----
+res_mixMod_mstnNorm_gk_dose_tab <- res_mixMod_mstnNorm_gk_dose |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_")) |> 
+  select(var_indep_name, var_dep_name, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+# export(res_mixMod_mstnNorm_gk_dose_tab, "output/tables/250722_others_mstnNorm_gk_dose_01.xlsx")
+export(res_mixMod_mstnNorm_gk_dose_tab, "output/tables/250820_others_mstnNorm_gk_dose_01.xlsx")
+
+
+
+#### figures ----
+pdf("output/figures/250820_others_mstnNorm_gk_dose_01.pdf")
+walk(res_mixMod_mstnNorm_gk_dose$fig, print)
+dev.off()
+
+### creatine dose ----
+#### model ----
+res_mixMod_creatine_dose <- d03 |>
+  mutate(
+    odpoved_na_terapii_m0_vs_m6 =
+      str_replace(odpoved_na_terapii_m0_vs_m6, "No Improvement", "No improvement")
+  ) |>
+  select(projekt_id, pohlavi, vek, gk, davka_gk_mg_den,denna_davka_gk_mg_kg_bw, podtyp_nemoci_zjednoduseny, poradie_vysetrenia, all_of(var_dep_01), all_of(var_indep_01)) |>
+  filter(poradie_vysetrenia %in% c("M0", "M3", "M6", "M18")) |>
+  pivot_longer(cols = any_of(var_dep_01 |>  str_subset("^(odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l)$", negate = TRUE)),
+               names_to = "var_dep_name",
+               values_to = "var_dep_value") |> 
+  pivot_longer(cols = any_of(var_indep_01),
+               names_to = "var_indep_name",
+               values_to = "var_indep_value") |> 
+  group_by(var_dep_name, var_indep_name) |> 
+  nest() |> 
+  # filter(var_dep_name %in% c("ast", "alt", "ck", "crp")) |> 
+  filter(!str_detect(var_dep_name, "mmt")) |>
+  mutate(data = map(data, ~ .x |> 
+                      mutate(var_indep_value_scl = log(var_indep_value + 1),
+                             var_dep_value_scl = log(var_dep_value + 1),
+                             gk = factor(gk)
+                      )),
+         mod_raw = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value + poradie_vysetrenia + kreatinin_umol_l + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_10 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value + poradie_vysetrenia + kreatinin_umol_l + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_01 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value ~ var_indep_value + poradie_vysetrenia +  kreatinin_umol_l + (1 | projekt_id),
+           data = .x
+         )),
+         mod_log_11 = map(data, ~ fit(
+           lmer_mod,
+           formula = var_dep_value_scl ~ var_indep_value + poradie_vysetrenia +  kreatinin_umol_l + (1 | projekt_id),
+           data = .x
+         )),
+         shapiro_p_raw = map_dbl(mod_raw, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_10 = map_dbl(mod_log_10, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_01 = map_dbl(mod_log_01, ~ shapiro.test(residuals(.x$fit))$p.value),
+         shapiro_p_log_11 = map_dbl(mod_log_11, ~ shapiro.test(residuals(.x$fit))$p.value)
+  )
+
+res_mixMod_creatine_dose <- res_mixMod_creatine_dose |> 
+  select(-contains("shap")) |> 
+  pivot_longer(cols = contains("mod"),
+               names_to = "mod_name",
+               values_to = "mod_value") |> 
+  mutate(mod_name = str_remove(mod_name, "mod_")) |> 
+  left_join(res_mixMod_creatine_dose |> 
+              select(-contains("mod_"), -data) |> 
+              pivot_longer(cols = contains("shap"),
+                           names_to = "shap_name",
+                           values_to = "shap_value") |>
+              mutate(shap_name = str_remove(shap_name, "shapiro_p_")),
+            by = c("var_dep_name", "var_indep_name", "mod_name" = "shap_name")) |> 
+  group_by(var_indep_name, var_dep_name) |> 
+  slice_max(shap_value, n = 1) |> 
+  ungroup() |> 
+  mutate(tidier = map(mod_value, lmer_tidier),
+         fig = pmap(list(mod_value, var_indep_name,var_dep_name), 
+                    ~plot_mixed_terms_05(model = ..1, xlab = ..2, ylab = ..3))) 
+
+
+#### table ----
+res_mixMod_creatine_dose_tab <- res_mixMod_creatine_dose |> 
+  unnest(tidier) |> 
+  filter(str_detect(term, "var_indep_|kreatin")) |> 
+  select(var_indep_name, var_dep_name, term, mod_name, estimate, p.value,
+         conf.low, conf.high,  shap_value) |> 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
+  arrange(var_indep_name )
+
+# export(res_mixMod_creatine_dose_tab, "output/tables/250722_others_creatine_dose_01.xlsx")
+export(res_mixMod_creatine_dose_tab, "output/tables/250820_others_creatine_dose_01.xlsx")
+
+
+
+#### figures ----
+# pdf("output/figures/250722_others_creatine_dose_01.pdf")
+pdf("output/figures/250820_others_creatine_dose_01.pdf")
+walk(res_mixMod_creatine_dose$fig, print)
+dev.off()
+
+### sex and age ----
+#### model ----
 res_mixMod_age_sex <- d04_sel1_nested |> 
   filter(var_indep_name == "mstn" | !str_detect(var_dep_name, "mmt")) |>
   mutate(data = map(data, ~ .x |> 
@@ -771,7 +1217,7 @@ res_mixMod_age_sex <- res_mixMod_age_sex |>
                     ~plot_mixed_terms_03(model = ..1, xlab = ..2, ylab = ..3, var_indep2 = "pohlavi"))) 
 
 
-### table ----
+#### table ----
 res_mixMod_age_sex_tab <- res_mixMod_age_sex |> 
   unnest(tidier) |> 
   filter(str_detect(term, "var_indep_")) |> 
@@ -780,13 +1226,14 @@ res_mixMod_age_sex_tab <- res_mixMod_age_sex |>
   mutate(across(where(is.numeric), ~ round(.x, 3))) |> 
   arrange(var_indep_name)
 
-
-
 # export(res_mixMod_age_sex_tab, "output/tables/250722_others_age_sex_01.xlsx")
+export(res_mixMod_age_sex_tab, "output/tables/250820_others_age_sex_01.xlsx")
 
-### figures ----
+
+#### figures ----
 # pdf("output/figures/250722_others_age_sex_01.pdf", height = 6, width = 12)
+pdf("output/figures/250820_others_age_sex_01.pdf", height = 6, width = 12)
 walk(res_mixMod_age_sex$fig, print)
-# dev.off()
+dev.off()
 
 

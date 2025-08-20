@@ -62,12 +62,12 @@ pal_okabe_ito <- colorblind_pal()(8)[2:8] # ggthemes
 
 
 # any ggplot
-median_cl_boot <- function(x, conf = 0.95) {
+median_cl_boot <- function(x, conf = 0.95, B = 50000) {
   lconf <- (1 - conf)/2
   uconf <- 1 - lconf
   require(boot)
   bmedian <- function(x, ind) median(x[ind])
-  bt <- boot(x, bmedian, 50000)
+  bt <- boot(x, bmedian, B)
   bb <- boot.ci(bt, type = "perc")
   data.frame(y = median(x), ymin = quantile(bt$t, lconf), ymax = quantile(bt$t, 
                                                                           uconf))
@@ -588,6 +588,228 @@ plot_mixed_terms_04 <- function(model,
   return(p)
   
 }
+
+plot_mixed_terms_05 <- function(model, 
+                                var_pattern = "var_indep_",
+                                xlab = NULL, 
+                                ylab = NULL,
+                                p_label_size = 6,
+                                ...) {
+  library(broom.mixed)
+  library(sjPlot)
+  library(ggplot2)
+  library(sjmisc)    # for theme_sjplot2()
+  
+  # 1) grab fixed‐effect terms + p‐values
+  fe <- broom.mixed::tidy(as_lmerModLmerTest(model$fit), effects = "fixed")
+  
+  # 2) select those matching your pattern
+  sel_terms <- grep(var_pattern, fe$term, value = TRUE)
+  if (length(sel_terms) == 0) {
+    stop("No fixed-effect terms matched pattern: ", var_pattern)
+  }
+  if (length(sel_terms) > 1) {
+    warning("More than one term matched; plotting all. p-value will use the first.")
+  }
+  
+  # 3) extract the p-value of the first matched term
+  pval <- fe %>% 
+    filter(term == sel_terms[1])  |>  
+    pull(p.value)
+  
+  
+  
+  
+  fml <- Reduce(paste, 
+                deparse(parsnip::extract_fit_engine(model) |> formula())) |> 
+    str_replace("\\+\\s*poradie_vysetrenia",
+                "* poradie_vysetrenia") |> 
+    as.formula()
+  
+  
+  model_int <- parsnip::fit(model$spec, fml, data = model$fit@frame)
+  
+  sjPlot::plot_model(
+    model_int,
+    type      = "int",
+    show.data = TRUE
+  )
+  
+  
+  # 4) build the emmeans plot
+  p <- sjPlot::plot_model(
+    model_int,
+    type      = "int",
+    show.data = TRUE
+  )
+  
+  # 5) apply axis labels if given
+  if (!is.null(xlab) || !is.null(ylab)) {
+    p <- p + labs(
+      x = xlab %||% waiver(),
+      y = ylab %||% waiver()
+    )
+  }
+  
+  # 6) annotate p-value in top-right
+  p <- p +
+    annotate(
+      "text",
+      x     = Inf,
+      y     = Inf,
+      label = paste0("p = ", signif(pval, 2)),
+      hjust = 1.1,
+      vjust = 1.5,
+      size  = p_label_size
+    ) +
+    
+    # 7) custom theme
+    theme_sjplot2() +
+    theme(
+      plot.title       = element_blank(),
+      plot.subtitle    = element_text(size = 20, color = "grey40", hjust = 0),
+      axis.title       = element_text(face = "bold", size = 20),
+      axis.text        = element_text(size = 18, color = "grey20"),
+      panel.grid.major = element_line(linetype = "dotted", color = "grey80"),
+      panel.grid.minor = element_blank()
+    )
+  
+  return(p)
+}
+
+
+# eda - podtyp_zjednodus across periods
+plot_period_type_01 <- function(data,
+                                xlab = NULL,
+                                ylab = NULL) {
+  pjd <- position_jitterdodge(jitter.width = 0.2, dodge.width = 0.6)
+  pd01 <- position_dodge(width = 0.6)
+  
+  fig <- data |>
+    ggplot(aes(
+      x = poradie_vysetrenia,
+      y = var_dep_value,
+      group = podtyp_nemoci_zjednoduseny,
+      colour = podtyp_nemoci_zjednoduseny,
+      na.rm = TRUE
+    )) +
+    theme_sjplot2() +
+    geom_jitter(alpha = 0.2, size = 2, position = pjd, show.legend = FALSE) +
+    stat_summary(
+      fun.data = median_cl_boot, geom = "errorbar", B = 1000,   # B refers to boostraps iters 
+      position = pd01, na.rm = TRUE, width = 0.3, size = 1
+    ) +
+    stat_summary(
+      fun = median, geom = "crossbar", 
+      position = pd01, na.rm = TRUE, width = 0.6, size = 0.3
+    ) +
+    stat_summary(
+      fun = median, geom = "point",
+      position = pd01, size = 2, show.legend = FALSE
+    )
+  
+  
+  if (!is.null(xlab) || !is.null(ylab)) {
+    fig <- fig + labs(
+      x = xlab %||% waiver(),
+      y = ylab %||% waiver()
+    )
+  }
+  
+  fig <- fig +
+    theme(axis.title = element_text(size = 22, face = "bold"),
+          axis.text = element_text(size = 20)) +
+    scale_colour_discrete(drop = TRUE, na.translate = FALSE) +
+    scale_fill_discrete(drop = TRUE, na.translate = FALSE)
+  
+  return(fig)
+}
+
+
+plot_lmer_grid_basic_01 <- function(data,
+                                    xlab = NULL, 
+                                    ylab = NULL,
+                                    ...) {
+  
+  library(dplyr)
+  library(lmerTest)  # lmer with p-values
+  library(emmeans)   # emtrends for simple slopes
+  library(ggplot2)
+  library(sjmisc)    # theme_sjplot2()
+  
+  # 1) Filter once (same as your plotting data)
+  df_plot <- data %>%
+    filter(!is.na(podtyp_nemoci_zjednoduseny),
+           !is.na(odpoved_na_terapii_m0_vs_m6))
+  
+  # 2) Fit a single model with interactions so slopes can vary by panel
+  #    (include interactions of var_indep_value with both factors;
+  #     use the 3-way to allow fully cell-specific slopes)
+  m <- lmer(
+    var_dep_value ~ var_indep_value * podtyp_nemoci_zjednoduseny * poradie_vysetrenia +
+      denna_davka_gk_mg_kg_bw + (1 | projekt_id),
+    data = df_plot
+  )
+  
+  # 3) Get per-panel trend (slope of var_indep_value) with p-values
+  slopes <- emtrends(
+    m,
+    ~ podtyp_nemoci_zjednoduseny * poradie_vysetrenia,
+    var = "var_indep_value"
+  ) %>%
+    summary(infer = c(TRUE, TRUE)) %>%   # gives SE, df, t-ratio, p.value, CI
+    mutate(p_label = paste0("p = ", signif(p.value, 3)))
+  
+  # 4) Plot and annotate p-values in each facet
+  fig <- ggplot(
+    df_plot,
+    aes(x = var_indep_value,
+        y = var_dep_value,
+        col  = podtyp_nemoci_zjednoduseny,
+        fill = podtyp_nemoci_zjednoduseny)
+  ) +
+    scale_shape_manual(values = c(21, 22, 23, 24, 25, 21, 22, 23, 24, 25),
+                       name = "Treatment Effect") +
+    theme_bw() +
+    geom_point(alpha = 0.2, size = 3, aes(shape = odpoved_na_terapii_m0_vs_m6)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_grid(podtyp_nemoci_zjednoduseny ~ poradie_vysetrenia) +
+    
+    theme(axis.title = element_text(face = "bold", size = 20),
+          axis.text = element_text(size = 18, color = "grey20"),
+          strip.text = element_text(face = "bold", size = 20)
+    ) +
+    
+    # annotate: match facet vars, pin to top-left
+    geom_text(
+      data = slopes,
+      aes(label = p_label),
+      x = Inf, y = -Inf,
+      hjust = 1.1,   # push left from right edge
+      vjust = -0.5,  # push up from bottom
+      inherit.aes = FALSE,
+      size = 8
+    )
+  
+  if (!is.null(xlab) || !is.null(ylab)) {
+    fig <- fig + labs(
+      x = xlab %||% waiver(),
+      y = ylab %||% waiver()
+    )
+  }
+  
+  return(fig)
+  
+}
+
+# ggally
+lowerFn <- function(data, mapping, method = "lm", ...) {
+  p <- ggplot(data = data, mapping = mapping) +
+    geom_point(alpha = 0.15) +
+    geom_smooth(method = method, se = FALSE, ...)
+  p
+}
+
 
 # tables ----
 ## column with 0, 1, and NA ----
