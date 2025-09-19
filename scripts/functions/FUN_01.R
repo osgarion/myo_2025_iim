@@ -542,7 +542,9 @@ plot_mixed_terms_04 <- function(model,
   # 2) Your base plot
   p <- plot(preds) +
     geom_point(
-      data = data_new,
+      data = data_new |> 
+        filter(!is.na(podtyp_nemoci_zjednoduseny)) |> 
+        mutate(group = podtyp_nemoci_zjednoduseny),
       aes(x = !!sym(predictor), 
           y = !!sym(dep_var), 
           colour = odpoved_na_terapii_m0_vs_m6, 
@@ -680,7 +682,6 @@ plot_mixed_terms_05 <- function(model,
 
 # eda - podtyp_zjednodus across periods
 plot_period_type_01 <- function(data,
-                                xlab = NULL,
                                 ylab = NULL) {
   pjd <- position_jitterdodge(jitter.width = 0.2, dodge.width = 0.6)
   pd01 <- position_dodge(width = 0.6)
@@ -711,7 +712,7 @@ plot_period_type_01 <- function(data,
   
   if (!is.null(xlab) || !is.null(ylab)) {
     fig <- fig + labs(
-      x = xlab %||% waiver(),
+      x = "Poradie vyšetrenia",
       y = ylab %||% waiver()
     )
   }

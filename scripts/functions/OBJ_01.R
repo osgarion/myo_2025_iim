@@ -2,18 +2,18 @@
 var_indep_01 <- c("mstn", "fst", "fstl3", "akta")
 var_dep_01 <- c("mmt8_total", "mmt10_total", "fi_2", "borg10", "haq", 
                 "sf36_mcs", "sf36_pf", "sf36_rp", "sf36_bp", "sf36_gh", "sf36_vt",
-                "sf36_sf", "sf36_re", "sf36_mh", "crp", "ast", "alt", "ck", "ld", 
+                "sf36_sf", "sf36_re", "sf36_mh", "sf36_pcs", "crp", "ast", "alt", "ck", "ld", 
                 "kreatinin_umol_l", "mitax", "myoglobin","myoact", 
                 "physician_activity_vas", "muscle_disease_activity", 
                 "odpoved_na_terapii_m0_vs_m6")
 var_dep_02 <- c("mmt8_total", "mmt10_total", "fi_2")
 var_dep_03 <- c("mmt8_total", "mmt10_total", "fi_2", "borg10", "haq", 
                 "sf36_mcs", "sf36_pf", "sf36_rp", "sf36_bp", "sf36_gh", "sf36_vt",
-                "sf36_sf", "sf36_re", "sf36_mh", "crp", "ast", "alt", "ck", "ld", 
+                "sf36_sf", "sf36_re", "sf36_mh", "sf36_pcs", "crp", "ast", "alt", "ck", "ld", 
                 "mitax", "myoglobin","myoact", 
                 "physician_activity_vas", "muscle_disease_activity", 
                 "odpoved_na_terapii_m0_vs_m6")
-
+sel_val_01 <- import("data/processed/selected_colnames_01.xlsx")
 
 # data ----
 ## importing ----
