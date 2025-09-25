@@ -1237,9 +1237,18 @@ walk(res_mixMod_age_sex$fig, print)
 dev.off()
 
 ## covariate models ----
+### models ----
 tic()
 Sys.time()
-### models ----
+
+cluster <- multidplyr::new_cluster(ncores)
+multidplyr::cluster_library(cluster, c("dplyr","purrr","stringr","tibble", 
+                                       "data.table", "tidyverse", "tidymodels",
+                                       "multilevelmod","lme4","lmerTest",
+                                       "broom.mixed", "easystats"))
+multidplyr::cluster_copy(cluster, c("model_comp","model_min", "model_comp_int"))
+
+
 res_mixMod_covar_01 <- d04_sel2 |> 
   mutate(across(.cols = c("ast", "alt", "ck", "crp", "haq", "ld", "mitax", "myoact", "myoglobin"), function(x) log(x+1))) |> 
   pivot_longer(cols = any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
@@ -1249,35 +1258,44 @@ res_mixMod_covar_01 <- d04_sel2 |>
                names_to = "var_indep_name",
                values_to = "var_indep_value") |> 
   group_by(var_dep_name, var_indep_name) |> 
-  nest() |> 
-  ungroup() |> 
-  filter(!str_detect(var_dep_name, "_total")) |>
-  mutate(mod_vek = map(data, ~model_comp(.x,"vek")),
-         mod_gk = map(data, ~model_comp(.x,"denna_davka_gk_mg_kg_bw")),
-         mod_ck = map(data, ~model_comp(.x,"kreatinin_umol_l")),
-         mod_bcm = map(data, ~model_comp(.x,"bcm")),
-         mod_sex = map(data, ~model_comp(.x,"pohlavi")),
-         mod_sub = map(data, ~model_comp(.x,"podtyp_nemoci_zjednoduseny")),
-         mod_jo = map(data, ~model_comp(.x,"jo_1")),
-         mod_hmgcr = map(data, ~model_comp(.x,"anti_hmgcr")),
-         mod_covar_vek = map(mod_vek, ~.x$model),
-         mod_covar_gk = map(mod_gk, ~.x$model),
-         mod_covar_ck = map(mod_ck, ~.x$model),
-         mod_covar_bcm = map(mod_bcm, ~.x$model),
-         mod_covar_sex = map(mod_sex, ~.x$model),
-         mod_covar_sub = map(mod_sub, ~.x$model),
-         mod_covar_jo = map(mod_jo, ~.x$model),
-         mod_covar_hmgcr = map(mod_hmgcr, ~.x$model),
-         mod_NOcovar_vek = map(mod_vek, ~.x$model_noCovar),
-         mod_NOcovar_gk = map(mod_gk, ~.x$model_noCovar),
-         mod_NOcovar_ck = map(mod_ck, ~.x$model_noCovar),
-         mod_NOcovar_bcm = map(mod_bcm, ~.x$model_noCovar),
-         mod_NOcovar_sex = map(mod_sex, ~.x$model_noCovar),
-         mod_NOcovar_sub = map(mod_sub, ~.x$model_noCovar),
-         mod_NOcovar_jo = map(mod_jo, ~.x$model_noCovar),
-         mod_NOcovar_hmgcr = map(mod_hmgcr, ~.x$model_noCovar),
-         mod_without = map(data, ~model_min(.x))
+  # filter(!str_detect(var_dep_name, "_total")) |>           # drop of mmt-8 and mmt-10
+  multidplyr::partition(cluster) |> 
+  do(
+    # data = data.table(.),
+    mod_vek =model_comp(.,"vek"),
+    mod_gk = model_comp(.,"denna_davka_gk_mg_kg_bw"),
+    mod_ck = model_comp(.,"kreatinin_umol_l"),
+    mod_bcm = model_comp(.,"bcm"),
+    mod_sex = model_comp(.,"pohlavi"),
+    mod_sub = model_comp(.,"podtyp_nemoci_zjednoduseny"),
+    mod_jo = model_comp(.,"jo_1"),
+    mod_hmgcr = model_comp(.,"anti_hmgcr"),
+    mod_int_sex = model_comp_int(data = ., "vek"),
+    mod_without = model_min(.)
+  ) |> 
+  collect() |> 
+  mutate(
+    mod_covar_vek = map(mod_vek, ~.x$model),
+    mod_covar_gk = map(mod_gk, ~.x$model),
+    mod_covar_ck = map(mod_ck, ~.x$model),
+    mod_covar_bcm = map(mod_bcm, ~.x$model),
+    mod_covar_sex = map(mod_sex, ~.x$model),
+    mod_covar_sub = map(mod_sub, ~.x$model),
+    mod_covar_jo = map(mod_jo, ~.x$model),
+    mod_covar_hmgcr = map(mod_hmgcr, ~.x$model),
+    mod_covar_int_sex = map(mod_int_sex, ~.x$model),
+    mod_NOcovar_vek = map(mod_vek, ~.x$model_noCovar),
+    mod_NOcovar_gk = map(mod_gk, ~.x$model_noCovar),
+    mod_NOcovar_ck = map(mod_ck, ~.x$model_noCovar),
+    mod_NOcovar_bcm = map(mod_bcm, ~.x$model_noCovar),
+    mod_NOcovar_sex = map(mod_sex, ~.x$model_noCovar),
+    mod_NOcovar_sub = map(mod_sub, ~.x$model_noCovar),
+    mod_NOcovar_jo = map(mod_jo, ~.x$model_noCovar),
+    mod_NOcovar_hmgcr = map(mod_hmgcr, ~.x$model_noCovar),
+    mod_NOcovar_int_sex = map(mod_int_sex, ~.x$model_noCovar)
   ) 
+
+walk(cluster, ~ .x$kill()); gc()
 
 toc()
 beep(4)
@@ -1293,7 +1311,8 @@ res_mixMod_covar_01_tab <- res_mixMod_covar_01 |>
     mod_com_sex = map(mod_sex, ~.x$table),
     mod_com_sub = map(mod_sub, ~.x$table),
     mod_com_jo = map(mod_jo, ~.x$table),
-    mod_com_hmgcr = map(mod_bcm, ~.x$table)
+    mod_com_hmgcr = map(mod_hmgcr, ~.x$table),
+    mod_com_int_sex = map(mod_int_sex, ~.x$table)
   ) |> 
   select(starts_with("var_"), contains("mod_com")) |> 
   unnest_wider(mod_com_without, names_sep = "_") |>
@@ -1305,8 +1324,10 @@ res_mixMod_covar_01_tab <- res_mixMod_covar_01 |>
   unnest_wider(mod_com_sub,  names_sep = "_") |> 
   unnest_wider(mod_com_jo,  names_sep = "_") |> 
   unnest_wider(mod_com_hmgcr,  names_sep = "_") |> 
+  unnest_wider(mod_com_int_sex,  names_sep = "_") |> 
   rename_with(~ str_remove(., "mod_com_"), everything()) |> 
-  mutate(across(where(is.numeric), ~round(.x, 3)))
+  mutate(across(where(is.numeric), ~round(.x, 3))) |> 
+  arrange(var_dep_name, var_indep_name) 
 
 #### kableExtra ----
 (res_mixMod_covar_01_tab_kable <- res_mixMod_covar_01_tab |> 
@@ -1319,13 +1340,15 @@ res_mixMod_covar_01_tab <- res_mixMod_covar_01 |>
                         "P-value - comparison", "R2", "P-Value - covariate",                      "P-value - comparison", "R2", "P-Value - covariate",
                         "P-value - comparison", "R2", "P-Value - covariate",
                         "P-value - comparison", "R2", "P-Value - covariate",
+                        "P-value - comparison", "R2", "P-Value - covariate",
                         "P-value - comparison", "R2", "P-Value - covariate")) |> 
     kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
                   full_width = FALSE) |> 
     add_header_above(c("Variables" = 2,  "Without covariate" = 2,
                        "Age" = 3, "GC per day and weight" = 3,
                        "Creatinine" = 3, "BCM" = 3, "Gender" = 3,
-                       "Subdiagnosis" = 3, "Anti-JO-1"= 3, "Anti-HMGCR" = 3)) |> 
+                       "Subdiagnosis" = 3, "Anti-JO-1"= 3, "Anti-HMGCR" = 3,
+                       "With Gender Interaction" = 3)) |> 
     collapse_rows(1, valign = "top") )
 
 ### model comparisons ----
@@ -1348,7 +1371,8 @@ res_mixMod_covar_02_vek <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 res_mixMod_covar_02_gk <- res_mixMod_covar_01 |> 
   select(starts_with("var_"), ends_with("_gk")) |> 
@@ -1369,7 +1393,8 @@ res_mixMod_covar_02_gk <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 res_mixMod_covar_02_ck <- res_mixMod_covar_01 |> 
   select(starts_with("var_"), ends_with("_ck")) |> 
@@ -1390,7 +1415,8 @@ res_mixMod_covar_02_ck <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 
 res_mixMod_covar_02_bmc <- res_mixMod_covar_01 |> 
@@ -1412,7 +1438,8 @@ res_mixMod_covar_02_bmc <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 res_mixMod_covar_02_sex <- res_mixMod_covar_01 |> 
   select(starts_with("var_"), ends_with("_sex")) |> 
@@ -1433,7 +1460,8 @@ res_mixMod_covar_02_sex <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 res_mixMod_covar_02_sub <- res_mixMod_covar_01 |> 
   select(starts_with("var_"), ends_with("_sub")) |> 
@@ -1454,7 +1482,8 @@ res_mixMod_covar_02_sub <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 res_mixMod_covar_02_jo <- res_mixMod_covar_01 |> 
   select(starts_with("var_"), ends_with("_jo")) |> 
@@ -1475,7 +1504,8 @@ res_mixMod_covar_02_jo <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 
 res_mixMod_covar_02_hmgcr <- res_mixMod_covar_01 |> 
@@ -1497,18 +1527,42 @@ res_mixMod_covar_02_hmgcr <- res_mixMod_covar_01 |>
   unnest(tidier) |> 
   filter(Parameter == "var_indep_value") |> 
   select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
-         -CI, -Effects, -SE, -df_error) 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
+
+res_mixMod_covar_02_int_sex <- res_mixMod_covar_01 |> 
+  select(starts_with("var_"), ends_with("_int_sex")) |> 
+  left_join(res_mixMod_covar_01_tab |> 
+              select(starts_with("var_"), int_sex_p_val_comp)) |> 
+  group_by(var_dep_name) |> 
+  mutate(
+    covariate = "sex-interaction",
+    n_sig = sum(int_sex_p_val_comp < 0.06, na.rm = TRUE),
+    mod_final = if_else(n_sig > 2, mod_covar_int_sex, mod_NOcovar_int_sex),
+    adjustment  = if_else(n_sig > 2, "adjusted", "without"),
+    tidier = map(mod_final, ~model_parameters(
+      .x$fit,
+      ci = 0.95,
+      df_method = "satterthwaite"))
+  ) |>
+  ungroup() |>
+  unnest(tidier) |> 
+  filter(Parameter == "var_indep_value") |> 
+  select(-n_sig, -starts_with("mod_"), -Parameter, - Group, -t, 
+         -CI, -Effects, -SE, -df_error) |> 
+  arrange(var_dep_name, var_indep_name)
 
 ### export ----
 export(list(overall = res_mixMod_covar_01_tab,
             age = res_mixMod_covar_02_vek,
             gk = res_mixMod_covar_02_gk,
-            ck = res_mixMod_covar_02_ck,
+            creatine = res_mixMod_covar_02_ck,
             bmc = res_mixMod_covar_02_bmc,
             gender = res_mixMod_covar_02_sex,
             subdiagnosis = res_mixMod_covar_02_sub,
             anti_jo_1 = res_mixMod_covar_02_jo,
-            anti_hmgcr = res_mixMod_covar_02_hmgcr),
+            anti_hmgcr = res_mixMod_covar_02_hmgcr,
+            sex_interaction = res_mixMod_covar_02_int_sex),
        "output/tables/250922_covariates_01.xlsx")
 
 

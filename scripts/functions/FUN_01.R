@@ -859,6 +859,47 @@ model_comp <- function(data, covar) {
   
 }
 
+model_comp_int <- function(data, covar) {
+  
+  data <- data |> 
+    dplyr::select(var_dep_value, poradie_vysetrenia, var_indep_value, 
+                  all_of(covar), projekt_id) |> 
+    na.omit()
+  
+  rhs_terms <- c("poradie_vysetrenia", paste0("var_indep_value*", covar), "(1 | projekt_id)")
+  fml <- as.formula(paste("var_dep_value ~", paste(rhs_terms, collapse = " + ")))
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + (1 | projekt_id),
+    data = data
+  )
+  
+  mod2 <- fit(
+    lmer_mod,
+    formula = fml,
+    data = data
+  )
+  
+  p_val_comp <- stats::anova(mod1$fit, mod2$fit)$`Pr(>Chisq)`[[2]]
+  r2_mod <- performance(mod2, estimator = "ML")$R2_conditional
+  p_val_covar <- model_parameters(mod2$fit)$p[[7]]
+  
+  return(list(table = tibble(p_val_comp = p_val_comp,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod2,
+              model_noCovar = mod1)
+  )
+  
+}
+
 model_min <- function(data) {
   
   data <- data |> 

@@ -151,6 +151,12 @@ d04_sel2 <- d03 |>
     odpoved_na_terapii_m0_vs_m6 =
       str_replace(odpoved_na_terapii_m0_vs_m6, "No Improvement", "No improvement")
   ) |>
+  group_by(projekt_id) |>
+  mutate(
+    across(c(jo_1, anti_hmgcr),
+           ~ if_else(any(. == 1, na.rm = TRUE), 1L, 0L))
+  ) |>
+  ungroup() |>
   select(projekt_id, pohlavi, vek, gk, davka_gk_mg_den,denna_davka_gk_mg_kg_bw, 
          podtyp_nemoci_zjednoduseny, poradie_vysetrenia, bcm, jo_1, anti_hmgcr,
          all_of(var_dep_01), all_of(var_indep_01)) |>
