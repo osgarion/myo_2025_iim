@@ -62,8 +62,10 @@ eval_dup_01 <- d03 |> get_dupes()  |>  capture_messages()
 vis_miss(d03)
 gg_miss_var(d03)
 gg_miss_var(d03 ,facet=poradie_vysetrenia)
+gg_miss_var(d04_sel2 ,facet=poradie_vysetrenia)
 gg_miss_case(d03)
 gg_miss_case(d03 ,facet = poradie_vysetrenia)
+gg_miss_case(d04_sel2 ,facet = poradie_vysetrenia)
 (miss_tab01 <- miss_var_summary(d03))
 (miss_tab02 <- miss_case_summary(d03))
 
@@ -1564,5 +1566,252 @@ export(list(overall = res_mixMod_covar_01_tab,
             anti_hmgcr = res_mixMod_covar_02_hmgcr,
             sex_interaction = res_mixMod_covar_02_int_sex),
        "output/tables/250922_covariates_01.xlsx")
+
+## covariate models 2 ----
+### only covariates ----
+#### models ----
+tic()
+Sys.time()
+
+cluster <- multidplyr::new_cluster(ncores)
+multidplyr::cluster_library(cluster, c("dplyr","purrr","stringr","tibble", 
+                                       "data.table", "tidyverse", "tidymodels",
+                                       "multilevelmod","lme4","lmerTest",
+                                       "broom.mixed", "easystats"))
+multidplyr::cluster_copy(cluster, c("model_covar","model_min", "model_comp_int"))
+
+res_mixMod_covar_02 <- d04_sel2 |>
+  select(any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
+         any_of(var_indep_01),
+         vek, denna_davka_gk_mg_kg_bw, kreatinin_umol_l, bcm, pohlavi, 
+         podtyp_nemoci_zjednoduseny, jo_1, anti_hmgcr, projekt_id, poradie_vysetrenia) |> 
+  mutate(across(.cols = c("ast", "alt", "ck", "crp", "haq", "ld", "mitax", "myoact", "myoglobin"), function(x) log(x+1)),
+         jo_1 = as.factor(jo_1),
+         anti_hmgcr = as.factor(anti_hmgcr)) |> 
+  # mice::mice("pmm", m = 20, 
+  #      maxit = 15, 
+  #      printFlag = F) |> complete() |> 
+  pivot_longer(cols = any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
+               names_to = "var_dep_name",
+               values_to = "var_dep_value") |> 
+  pivot_longer(cols = any_of(var_indep_01),
+               names_to = "var_indep_name",
+               values_to = "var_indep_value") |> 
+  group_by(var_dep_name, var_indep_name) |> 
+  multidplyr::partition(cluster) |> 
+  do(
+    data = data.table(.),
+    mod_without = model_min(., filter_na = FALSE),
+    mod_covar_gk = model_covar(., "denna_davka_gk_mg_kg_bw", filter_na = FALSE),
+    mod_covar_age = model_covar(., "vek", filter_na = FALSE),
+    mod_covar_bcm = model_covar(., "bcm", filter_na = FALSE),
+    mod_covar_creatine = model_covar(., "kreatinin_umol_l", filter_na = FALSE)
+  ) |> 
+  collect()
+
+walk(cluster, ~ .x$kill()); gc()
+
+toc()
+beep(4)
+
+#### tables ----
+# without confounders
+res_mixMod_covar_02_tab <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, mod_without) |> 
+  mutate(mod_com_without = map(mod_without, ~.x$table)) |> 
+  unnest(mod_com_without) |> 
+  select(-mod_without) |> 
+  arrange(p_val_covar) |> 
+  rename_with(~ paste0(.x, "_without"),
+              .cols = c("omega_sq_p",
+                        "r2_mod",
+                        "p_val_covar"))
+# glucocorticoids dose per day and weight
+res_mixMod_covar_02_tab_gk <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, mod_covar_gk) |> 
+  mutate(mod_com_gk = map(mod_covar_gk, ~.x$table)) |> 
+  unnest(mod_com_gk) |> 
+  select(-mod_covar_gk) |> 
+  arrange(p_val_covar) |> 
+  rename_with(~ paste0(.x, "_gk"),
+              .cols = c("omega_sq_p",
+                        "r2_mod",
+                        "p_val_covar"))
+# age
+res_mixMod_covar_02_tab_age <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, mod_covar_age) |> 
+  mutate(mod_com_age = map(mod_covar_age, ~.x$table)) |> 
+  unnest(mod_com_age) |> 
+  select(-mod_covar_age) |> 
+  arrange(p_val_covar) |> 
+  rename_with(~ paste0(.x, "_age"),
+              .cols = c("omega_sq_p",
+                        "r2_mod",
+                        "p_val_covar"))
+# creatine
+res_mixMod_covar_02_tab_creatine <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, mod_covar_creatine) |> 
+  mutate(mod_com_creatine = map(mod_covar_creatine, ~.x$table)) |> 
+  unnest(mod_com_creatine) |> 
+  select(-mod_covar_creatine) |> 
+  arrange(p_val_covar) |> 
+  rename_with(~ paste0(.x, "_creatine"),
+              .cols = c("omega_sq_p",
+                        "r2_mod",
+                        "p_val_covar"))
+# body cell mass
+res_mixMod_covar_02_tab_bcm <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, mod_covar_bcm) |> 
+  mutate(mod_com_bcm = map(mod_covar_bcm, ~.x$table)) |> 
+  unnest(mod_com_bcm) |> 
+  select(-mod_covar_bcm) |> 
+  arrange(p_val_covar) |> 
+  rename_with(~ paste0(.x, "_bcm"),
+              .cols = c("omega_sq_p",
+                        "r2_mod",
+                        "p_val_covar"))
+# funal table
+res_mixMod_covar_02_tab_confounders <- res_mixMod_covar_02_tab |> 
+  full_join(res_mixMod_covar_02_tab_age, by = c("var_dep_name", "var_indep_name")) |> 
+  full_join(res_mixMod_covar_02_tab_gk, by = c("var_dep_name", "var_indep_name")) |> 
+  full_join(res_mixMod_covar_02_tab_bcm, by = c("var_dep_name", "var_indep_name")) |> 
+  full_join(res_mixMod_covar_02_tab_creatine, by = c("var_dep_name", "var_indep_name"))
+
+#### export ----
+export(res_mixMod_covar_02_tab_confounders, "output/tables/250930_covariates_01.xlsx")
+
+### subgrouping ----
+#### age ----
+res_mixMod_covar_02_sub_age <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_age |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "vek",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "vek",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "vek",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "vek",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
+#### gk ----
+res_mixMod_covar_02_sub_gk <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_gk |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "denna_davka_gk_mg_kg_bw",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "denna_davka_gk_mg_kg_bw",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
+#### bcm ----
+res_mixMod_covar_02_sub_bcm <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_bcm |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "bcm",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "bcm",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "bcm",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "bcm",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
+#### creatine ----
+res_mixMod_covar_02_sub_creatine <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_creatine |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "kreatinin_umol_l",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "kreatinin_umol_l",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "kreatinin_umol_l",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "kreatinin_umol_l",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
 
 

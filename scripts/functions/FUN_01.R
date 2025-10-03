@@ -803,6 +803,115 @@ plot_lmer_grid_basic_01 <- function(data,
   
 }
 
+plot_lmer_grid_basic_02 <- function(data,
+                                    xlab = NULL, 
+                                    ylab = NULL,
+                                    covar_spec,
+                                    covar = NULL,
+                                    ...) {
+  
+  library(dplyr)
+  library(lmerTest)  # lmer with p-values
+  library(emmeans)   # emtrends for simple slopes
+  library(ggplot2)
+  library(sjmisc)    # theme_sjplot2()
+  
+  # 1) Filter once (same as your plotting data)
+  df_plot <-data 
+  
+  
+  ## formula specification
+  if (is.null(covar)){
+    rhs_terms <- paste(c("poradie_vysetrenia", "var_indep_value", covar_spec), 
+                       collapse = " * ")
+  } else{
+    rhs_terms <- paste(paste(c("poradie_vysetrenia", "var_indep_value", covar_spec), 
+                             collapse = " * "), " + ", covar)
+  }
+  
+  fml <- as.formula(paste("var_dep_value ~", paste(rhs_terms, collapse = " + "), " + (1 | projekt_id)"))
+  
+  # 2) Fit a single model with interactions so slopes can vary by panel
+  #    (include interactions of var_indep_value with both factors;
+  #     use the 3-way to allow fully cell-specific slopes)
+  
+  m <- lmer(
+    fml,
+    data = df_plot
+  )
+  
+  # 3) Get per-panel trend (slope of var_indep_value) with p-values
+  spec <- as.formula(paste("~ ", covar_spec, "* poradie_vysetrenia"))
+  spec2 <- as.formula(paste("~ ", covar_spec))
+  
+  
+  slopes <- emtrends(
+    m,
+    specs = spec,
+    var = "var_indep_value"
+  ) |> 
+    summary(infer = c(TRUE, TRUE)) |>    # gives SE, df, t-ratio, p.value, CI
+    mutate(p_label = paste0("p = ", signif(p.value, 3)))
+  
+  slopes2 <- emtrends(
+    m,
+    specs = spec2,
+    var = "var_indep_value"
+  ) |> 
+    summary(infer = c(TRUE, TRUE)) |>    # gives SE, df, t-ratio, p.value, CI
+    mutate(p_label = paste0("p = ", signif(p.value, 3)),
+           f_label = paste0(!! sym(covar_spec), " (",p_label, ")"))
+  
+  labs_vec  <- setNames(slopes2$f_label, as.character(slopes2[[covar_spec]]))
+  labs_list <- list(); labs_list[[covar_spec]] <- labs_vec
+  
+  # 4) Plot and annotate p-values in each facet
+  fig <- ggplot(
+    df_plot |> 
+      filter(!is.na(!! sym(covar_spec))),
+    aes(x = var_indep_value,
+        y = var_dep_value,
+        colour = !! sym(covar_spec),
+        fill   = !! sym(covar_spec))
+  ) +
+    scale_shape_manual(values = c(21, 22, 23, 24, 25, 21, 22, 23, 24, 25),
+                       name = "Treatment Effect") +
+    theme_bw() +
+    geom_point(alpha = 0.2, size = 3) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_grid(
+      rows = vars(!! sym(covar_spec)),
+      cols = vars(poradie_vysetrenia),
+      labeller = do.call(labeller, labs_list),
+      drop = TRUE) +
+    
+    theme(axis.title = element_text(face = "bold", size = 20),
+          axis.text = element_text(size = 18, color = "grey20"),
+          strip.text = element_text(face = "bold", size = 20)
+    ) +
+    
+    # annotate: match facet vars, pin to top-left
+    geom_text(
+      data = slopes,
+      aes(label = p_label),
+      x = Inf, y = -Inf,
+      hjust = 1.1,   # push left from right edge
+      vjust = -0.5,  # push up from bottom
+      inherit.aes = FALSE,
+      size = 8
+    )
+  
+  if (!is.null(xlab) || !is.null(ylab)) {
+    fig <- fig + labs(
+      x = xlab %||% waiver(),
+      y = ylab %||% waiver()
+    )
+  }
+  
+  return(fig)
+  
+}
+
 # ggally
 lowerFn <- function(data, mapping, method = "lm", ...) {
   p <- ggplot(data = data, mapping = mapping) +
@@ -900,11 +1009,13 @@ model_comp_int <- function(data, covar) {
   
 }
 
-model_min <- function(data) {
+model_min <- function(data, filter_na = TRUE) {
   
-  data <- data |> 
-    select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
-    na.omit()
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
   
   ## tidymodels
   lmer_mod <- 
@@ -918,10 +1029,198 @@ model_min <- function(data) {
     data = data
   )
   
-  r2_mod <- performance(mod1, estimator = "ML")$R2_conditional
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
   p_val_covar <- model_parameters(mod1$fit)$p[[5]]
   
-  return(list(table = tibble(r2_mod = r2_mod,
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod1)
+  )
+  
+  
+}
+
+model_min_2 <- function(data, filter_na = TRUE) {
+  
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + (1 | projekt_id),
+    data = data
+  )
+  
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
+  p_val_covar <- model_parameters(mod1$fit)$p[[3]]
+  
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod1)
+  )
+  
+  
+}
+
+model_min_3 <- function(data, filter_na = TRUE) {
+  
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = var_dep_value ~ poradie_vysetrenia + var_indep_value + (1 | projekt_id),
+    data = data
+  )
+  
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
+  p_val_covar <- model_parameters(mod1$fit)$p[[4]]
+  
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod1)
+  )
+  
+  
+}
+
+
+model_covar <- function(data, covar, filter_na = TRUE) {
+  
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
+  
+  ## formula specification
+  rhs_terms <- c("poradie_vysetrenia", "var_indep_value", covar, "(1 | projekt_id)")
+  fml <- as.formula(paste("var_dep_value ~", paste(rhs_terms, collapse = " + ")))
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = fml,
+    data = data
+  )
+  
+  
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
+  p_val_covar <- model_parameters(mod1$fit)$p[[5]]
+  
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod1)
+  )
+  
+}
+
+model_covar_2 <- function(data, covar, filter_na = TRUE) {
+  
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
+  
+  ## formula specification
+  rhs_terms <- c("poradie_vysetrenia", "var_indep_value", covar, "(1 | projekt_id)")
+  fml <- as.formula(paste("var_dep_value ~", paste(rhs_terms, collapse = " + ")))
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = fml,
+    data = data
+  )
+  
+  
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
+  p_val_covar <- model_parameters(mod1$fit)$p[[3]]
+  
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
+                             p_val_covar = p_val_covar),
+              model = mod1)
+  )
+  
+}
+
+
+model_covar_3 <- function(data, covar, filter_na = TRUE) {
+  
+  if (filter_na){
+    data <- data |> 
+      select(var_dep_value, var_indep_value, poradie_vysetrenia, projekt_id) |> 
+      na.omit()
+  }
+  
+  ## formula specification
+  rhs_terms <- c("poradie_vysetrenia", "var_indep_value", covar, "(1 | projekt_id)")
+  fml <- as.formula(paste("var_dep_value ~", paste(rhs_terms, collapse = " + ")))
+  
+  ## tidymodels
+  lmer_mod <- 
+    linear_reg() |> 
+    set_engine("lmer", REML = FALSE) |> 
+    set_mode("regression")
+  
+  mod1 <- fit(
+    lmer_mod,
+    formula = fml,
+    data = data
+  )
+  
+  
+  omega <- sjstats::anova_stats(mod1$fit)$partial.omegasq[[2]]
+  r2_tbl <- performance::r2_nakagawa(mod1$fit)
+  r2_mod <- r2_tbl$R2_conditional
+  p_val_covar <- model_parameters(mod1$fit)$p[[4]]
+  
+  return(list(table = tibble(omega_sq_p = omega,
+                             r2_mod = r2_mod,
                              p_val_covar = p_val_covar),
               model = mod1)
   )

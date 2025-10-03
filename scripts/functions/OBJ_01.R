@@ -50,7 +50,7 @@ path_clin_01 <- file_to_load(phrase = "IMMET_terapie",
                             folder_path = folder_path)
 
 
-d02_clinics <- import(path_clin_01) |>
+d02_clinics <- import(path_clin_01 |> tail(1)) |>
   mutate(across(where(is.character), ~na_if(.x, "x"))) |> 
   clean_names() |> 
   tidyr::separate(
@@ -104,6 +104,12 @@ d05_norm <- import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw
   mutate(poradie_vysetrenia = factor(poradie_vysetrenia,
                                      levels = c("M0", "M3", "M6", "M18")))
   
+pre_filt_01 <- d01_myokiny |> 
+  select(maju_klinicke_data_pre_odfiltrovanie) |> 
+  na.omit() |> 
+  distinct() |> 
+  pull()
+
   
 ## merging ----
 d03 <- d02_clinics |> 
@@ -113,6 +119,7 @@ d03 <- d02_clinics |>
                    "poradie_vysetrenia",
                    "bbm_id",
                    "pohlavi")) |> 
+  filter(projekt_id %in% pre_filt_01) |> 
   group_by(projekt_id) |> 
   fill(podtyp_nemoci_zjednoduseny) |> 
   fill(odpoved_na_terapii_m0_vs_m6, .direction = "downup") |> 

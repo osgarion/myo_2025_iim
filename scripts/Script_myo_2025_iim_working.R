@@ -3,6 +3,115 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
+#### 250929 ----
+
+# --- EDIT these to match your columns ---
+id_var   <- "projekt_id"   # cluster ID (not imputed)
+time_var <- "poradie_vysetrenia"         # visit index/date (not imputed)
+
+# classify variables
+cont_vars <- c("mmt8_total","mmt10_total","fi_2","borg10","haq","sf36_mcs","sf36_pf",
+               "sf36_rp","sf36_bp","sf36_gh","sf36_vt","sf36_sf","sf36_re","sf36_mh",
+               "sf36_pcs","crp","ast","alt","ck","ld","mitax","myoglobin","myoact",
+               "physician_activity_vas","muscle_disease_activity","mstn","fst","fstl3",
+               "akta","vek","denna_davka_gk_mg_kg_bw","kreatinin_umol_l","bcm")
+bin_vars  <- c("pohlavi","jo_1","anti_hmgcr")   # binary (0/1)
+multi_cat <- c("podtyp_nemoci_zjednoduseny")    # unordered factor with >2 levels
+
+res_mixMod_covar_02 <- d04_sel2 |> 
+  mutate(across(.cols = c("ast", "alt", "ck", "crp", "haq", "ld", "mitax", "myoact", "myoglobin"), function(x) log(x+1))) |> 
+  select(any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
+         any_of(var_indep_01),
+         vek, denna_davka_gk_mg_kg_bw, kreatinin_umol_l, bcm, pohlavi, 
+         podtyp_nemoci_zjednoduseny, jo_1, anti_hmgcr, projekt_id, poradie_vysetrenia)
+
+# ensure types
+res_mixMod_covar_02[paste0(bin_vars)] <- lapply(res_mixMod_covar_02[paste0(bin_vars)], function(x) as.integer(as.character(x)))
+res_mixMod_covar_02[paste0(multi_cat)] <- lapply(res_mixMod_covar_02[paste0(multi_cat)], \(x) factor(x))
+
+# two-level methods for clustered longitudinal data
+meth[cont_vars] <- "2l.pan"
+meth[bin_vars]  <- "2l.bin"
+meth[multi_cat] <- "polyreg"           # multinomial (unordered)
+meth[c(id_var, time_var)] <- ""         # don’t impute ID/time
+
+
+# --- Predictor matrix: mark cluster, let time predict but not be imputed ---
+pred <- make.predictorMatrix(res_mixMod_covar_02)
+pred[, id_var] <- -2     # marks the cluster column
+pred[id_var, ] <- 0
+pred[, time_var] <- 1
+pred[time_var, ] <- 0
+
+# Non-negativity clamps (edit if some have upper caps, e.g., SF-36 <= 100)
+nonneg <- c("crp","vek","bcm","mmt8_total","mmt10_total","fi_2","haq",
+            "sf36_rp","sf36_bp","sf36_gh","sf36_vt","sf36_sf","sf36_re",
+            "sf36_mh","sf36_pcs","ast","alt","ck","ld","myoglobin",
+            "myoact","physician_activity_vas")
+post <- make.post(res_mixMod_covar_02)
+for (v in intersect(nonneg, names(df))) {
+  post[v] <- "imp[[j]][, i] <- pmax(0, imp[[j]][, i])"
+}
+
+
+res_mixMod_covar_02_imp <- mice(
+  data = res_mixMod_covar_02,
+  m = 20,            # number of imputations
+  maxit = 15,        # iterations
+  method = meth,
+  predictorMatrix = pred,
+  post = post,
+  printFlag = FALSE
+) |> complete()
+
+
+
+tic()
+Sys.time()
+
+cluster <- multidplyr::new_cluster(ncores)
+multidplyr::cluster_library(cluster, c("dplyr","purrr","stringr","tibble", 
+                                       "data.table", "tidyverse", "tidymodels",
+                                       "multilevelmod","lme4","lmerTest",
+                                       "broom.mixed", "easystats"))
+multidplyr::cluster_copy(cluster, c("model_comp","model_min", "model_comp_int"))
+
+
+> 
+  mice::mice("ppm", )
+  pivot_longer(cols = any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
+               names_to = "var_dep_name",
+               values_to = "var_dep_value") |> 
+  pivot_longer(cols = any_of(var_indep_01),
+               names_to = "var_indep_name",
+               values_to = "var_indep_value") |> 
+  group_by(var_dep_name, var_indep_name) |> 
+  multidplyr::partition(cluster) |> 
+  do(
+    # data = data.table(.),
+    mod_vek =model_comp(.,"vek"),
+    mod_gk = model_comp(.,"denna_davka_gk_mg_kg_bw"),
+    mod_ck = model_comp(.,"kreatinin_umol_l"),
+    mod_bcm = model_comp(.,"bcm"),
+    mod_sex = model_comp(.,"pohlavi"),
+    mod_sub = model_comp(.,"podtyp_nemoci_zjednoduseny"),
+    mod_jo = model_comp(.,"jo_1"),
+    mod_hmgcr = model_comp(.,"anti_hmgcr"),
+    mod_int_sex = model_comp_int(data = ., "vek"),
+    mod_without = model_min(.)
+  ) |> 
+  collect()
+
+
+walk(cluster, ~ .x$kill()); gc()
+
+toc()
+beep(4)
+
+
+
+
+
 
 # 250919 ----
 # covariate models
