@@ -3,7 +3,44 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
-#### 250929 ----
+# 251016 ----
+
+save.image("data/251016_data_01.RData")
+
+path_response_01 <- file_to_load(phrase = "Treatment Response", 
+                    folder_path = folder_path)
+d07 <- import(path_clin_01 |> tail(1))
+
+
+sel_val_02 <- c("projekt ID", "Poradie vyšetrenia", "Věk", "Pohlaví", "Trvání nemoci", 
+                "Podtyp nemoci_zjednodušený", "MITAX", "MYOACT", 
+                "Patient activity VAS", "Physician activity VAS", 
+                "Muscle Disease Activity", "Extramuscular Global Assessment", 
+                "MMT8 total", "MMT10 total", "FI-2", "Borg10", "HAQ", "SF36-PCS", 
+                "SF36-MCS", "odpověď na terapii M0 vs M6", "CRP", "AST", "ALT", 
+                "CK", "LD", "myoglobin", "kreatinin (umol/l)", "Jo-1", 
+                "anti HMGCR", "denná dávka GK (mg/kg BW)", "BMI", "Body Fat in %", 
+                "Lean Body Mass", "BCM", "ECM/BCM Index", "% cell share")
+
+
+test <- d02_clinics |> 
+  group_by(projekt_id) |> 
+  fill(odpoved_na_terapii_m0_vs_m6, .direction = "downup") |> 
+  fill(vek, .direction = "downup") |> 
+  ungroup() |> 
+  select(all_of(janitor::make_clean_names(sel_val_02))) |> 
+  filter(poradie_vysetrenia %in% c("M0", "M6")) |> 
+  relocate(projekt_id, poradie_vysetrenia, podtyp_nemoci_zjednoduseny, 
+           odpoved_na_terapii_m0_vs_m6, pohlavi, jo_1, anti_hmgcr)
+
+
+
+
+
+
+
+
+# 250929 ----
 
 # --- EDIT these to match your columns ---
 id_var   <- "projekt_id"   # cluster ID (not imputed)

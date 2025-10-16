@@ -29,10 +29,16 @@ dir.create("reports")
 # Libraries & functions ----
 # required
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, purrr,conflicted)
+pacman::p_load(tidyverse, purrr, conflicted, renv)
 
 # Functions and libraries uploading
 list.files("scripts/functions/", pattern="*.*", full.names=TRUE) |> map(~source(.))
+
+# Environment reproducibility ----
+# renv::init()        # once
+# renv::status()      # sync?
+# renv::snapshot()    # after changing deps
+# renv::restore()     # on a new machine
 
 # Back-up
 back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify using 'path_dest'

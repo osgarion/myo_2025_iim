@@ -81,7 +81,8 @@ d02_clinics <- import(path_clin_01 |> tail(1)) |>
   mutate(across(where(is_01_col), as.factor)) |> 
   mutate(across((vek:last_col()) & where(is.character), as.numeric)) |> 
   group_by(bbm_id) |> 
-  fill(kurak_nejmene_100_cigaret)
+  fill(kurak_nejmene_100_cigaret) |> 
+  ungroup()
 
 d05_norm <- import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Data/MSTN normalizácia na kreat, BCM.xlsx") |> 
   mutate(across(where(is.character), ~na_if(.x, "x"))) |> 
