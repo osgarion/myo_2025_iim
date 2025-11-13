@@ -920,6 +920,14 @@ lowerFn <- function(data, mapping, method = "lm", ...) {
   p
 }
 
+# plot umap figures
+plot_umap <- function(df, var) {
+  ggplot(df, aes(x = UMAP1, y = UMAP2, color = .data[[var]])) +
+    geom_point(size = 2, alpha = 0.9) +
+    theme_minimal(base_size = 14) +
+    labs(color = var, title = paste("UMAP –", var))
+}
+
 
 # tables ----
 ## column with 0, 1, and NA ----

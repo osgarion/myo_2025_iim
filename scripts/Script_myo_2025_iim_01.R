@@ -1676,7 +1676,7 @@ res_mixMod_covar_02_tab_bcm <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "p_val_covar"))
-# funal table
+# final table
 res_mixMod_covar_02_tab_confounders <- res_mixMod_covar_02_tab |> 
   full_join(res_mixMod_covar_02_tab_age, by = c("var_dep_name", "var_indep_name")) |> 
   full_join(res_mixMod_covar_02_tab_gk, by = c("var_dep_name", "var_indep_name")) |> 
@@ -1818,6 +1818,562 @@ res_mixMod_covar_02_sub_creatine <- res_mixMod_covar_02 |>
                                covar_spec = "anti_hmgcr"),
                           plot_lmer_grid_basic_02)
   )
+
+#### gk + bcm ----
+res_mixMod_covar_02_sub_gk_bcm <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_creatine |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw + bcm",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw + bcm",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "denna_davka_gk_mg_kg_bw + bcm",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "denna_davka_gk_mg_kg_bw + bcm",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
+
+
+# Cluster analyses ----
+## M0 ----
+### FAMD ----
+# https://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/115-famd-factor-analysis-of-mixed-data-in-r-essentials
+res_famd_m0 <- FAMD(
+  # d08_m0 |> select( -odpoved_na_terapii_m0_vs_m6),
+  d08_m0 |>filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+    select(-ends_with("_total")), # do tabulky byly dodány mda a mmt8 kategorie
+  graph = TRUE
+)
+# figures
+tiff("output/figures/cluster analyses/251113_m0_fmda_overview_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_m0,labelsize = 8,repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+## feature contribution
+tiff("output/figures/cluster analyses/251113_m0_fmda_feat_contrib_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_contrib(res_famd_m0, "var", axes = 1,labelsize = 8) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 18, face = "bold"),
+    axis.text = element_text(size = 14, angle = 45, hjust = 1),
+    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 14))
+dev.off()
+## quantitative variables - continuous
+tiff("output/figures/cluster analyses/251113_m0_fmda_continuous_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_m0, "quanti.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              labelsize = 8,
+              repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+## qualitative variables - factors
+tiff("output/figures/cluster analyses/251113_m0_fmda_factor_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_m0, "quali.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              labelsize = 8,
+              repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+  
+## podtyp_nemoci_zjednoduseny
+tiff("output/figures/cluster analyses/251113_m0_fmda_subdisease_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_m0,
+  habillage = "podtyp_nemoci_zjednoduseny",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+)+
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+  
+## odpoved_na_terapii_m0_vs_m6
+tiff("output/figures/cluster analyses/251113_m0_fmda_respose_trt_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_m0,
+  habillage = "odpoved_na_terapii_m0_vs_m6",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+## mda_categories
+tiff("output/figures/cluster analyses/251113_m0_fmda_mda_cat_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_m0,
+  habillage = "mda_categories",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+## mmt8_categories
+tiff("output/figures/cluster analyses/251113_m0_fmda_mmt8_cat_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_m0,
+  habillage = "mmt8_categories",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+### UMAP ----
+famd_scores_m0 <- res_famd_m0$ind$coord   # numeric low-dim representation
+
+umap_res_m0 <- umap(famd_scores_m0, n_neighbors = 15, min_dist = 0.1)
+
+
+# tiff("output/figures/cluster analyses/251113_m0_umap_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plot(umap_res_m0, col = as.numeric(d08_m0$podtyp_nemoci_zjednoduseny), pch = 19)
+# dev.off()
+
+d08_m0_2 <- d08_m0 |>filter(!is.na(odpoved_na_terapii_m0_vs_m6))
+
+umap_df <- as.data.frame(umap_res_m0) |>
+  setNames(c("UMAP1", "UMAP2")) |>
+  mutate(
+    podtyp = d08_m0_2$podtyp_nemoci_zjednoduseny,
+    mmt8 = d08_m0_2$mmt8_categories,
+    mda = d08_m0_2$mda_categories,
+    odpoved = d08_m0_2$odpoved_na_terapii_m0_vs_m6
+  )
+
+
+vars_to_plot <- c("podtyp", "mmt8", "mda", "odpoved")
+
+walk(vars_to_plot, function(v) {
+  
+  p <- plot_umap(umap_df, v)
+  
+  tiff(
+    filename = paste0("output/figures/cluster analyses/251113_umap_", v, ".tiff"),
+    compression = "lzw",
+    res = 300,
+    width = 1600,
+    height = 1200
+  )
+  print(p)
+  dev.off()
+})
+
+### PLS-DA ----
+# # disease subtype
+# d08_m0_pls_X <- model.matrix(
+#   ~ . - 1,
+#   data = d08_m0_pls |> 
+#     filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#     select(-podtyp_nemoci_zjednoduseny)) 
+# d08_m0_pls_Y <- d08_m0_pls |> 
+#   filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#   select(podtyp_nemoci_zjednoduseny) |> 
+#   pull()
+# 
+# pls_m0 <- plsda(d08_m0_pls_X, d08_m0_pls_Y, 
+#                 ncomp = 2, scale = TRUE)
+# 
+# ## visualization
+# tiff("output/figures/cluster analyses/251113_m0_pls_subdisease_group_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotIndiv(pls_m0, comp = c(1,2), 
+#           group = d08_m0_pls_Y,ellipse = TRUE, 
+#           legend=T) 
+# dev.off()
+# tiff("output/figures/cluster analyses/251113_m0_pls_subdisease_contrib_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotLoadings(pls_m0, contrib = 'max', method = 'median')
+# dev.off()
+# 
+# # response to treatmetn
+# d08_m0_pls_X_trt <- model.matrix(
+#   ~ . - 1,
+#   data = d08_m0_pls |> 
+#     filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#     select(-odpoved_na_terapii_m0_vs_m6)) 
+# d08_m0_pls_Y_trt <- d08_m0_pls |> 
+#   filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#   select(odpoved_na_terapii_m0_vs_m6) |> 
+#   pull()
+# 
+# pls_m0_trt <- plsda(d08_m0_pls_X_trt, d08_m0_pls_Y_trt, 
+#                     ncomp = 2, scale = TRUE)
+# 
+# ## visualization
+# tiff("output/figures/cluster analyses/251113_m0_pls_response_group_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotIndiv(pls_m0_trt, comp = c(1,2), group = d08_m0_pls_Y_trt, ellipse = TRUE, legend=T)
+# dev.off()
+# tiff("output/figures/cluster analyses/251113_m0_pls_response_contrib_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotLoadings(pls_m0_trt, contrib = 'max', method = 'median')
+# dev.off()
+
+source("scripts/cluster_plsda_pipeline.R")
+
+pls_results <- run_all_plsda(
+  df = d08_m0_pls,
+  prefix = "251113_m0_pls"
+)
+
+## delta ----
+### FAMD ----
+# https://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/115-famd-factor-analysis-of-mixed-data-in-r-essentials
+res_famd_delta <- FAMD(
+  # d08_delta |> select( -odpoved_na_terapii_m0_vs_m6),
+  d08_delta |>filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+    select(-ends_with("_total")), # do tabulky byly dodány mda a mmt8 kategorie
+  graph = TRUE
+)
+# figures
+tiff("output/figures/cluster analyses/251113_delta_fmda_overview_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_delta,labelsize = 8,repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+## feature contribution
+tiff("output/figures/cluster analyses/251113_delta_fmda_feat_contrib_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_contrib(res_famd_delta, "var", axes = 1,labelsize = 8) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 18, face = "bold"),
+    axis.text = element_text(size = 14, angle = 45, hjust = 1),
+    legend.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 14))
+dev.off()
+## quantitative variables - continuous
+tiff("output/figures/cluster analyses/251113_delta_fmda_continuous_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_delta, "quanti.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              labelsize = 8,
+              repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+## qualitative variables - factors
+tiff("output/figures/cluster analyses/251113_delta_fmda_factor_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_famd_var(res_famd_delta, "quali.var", col.var = "contrib", 
+              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+              labelsize = 8,
+              repel = TRUE) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+## podtyp_nemoci_zjednoduseny
+tiff("output/figures/cluster analyses/251113_delta_fmda_subdisease_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_delta,
+  habillage = "podtyp_nemoci_zjednoduseny",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+)+
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+## odpoved_na_terapii_m0_vs_m6
+tiff("output/figures/cluster analyses/251113_delta_fmda_respose_trt_01.tiff", 
+     compression = "lzw",
+     res = "300",
+     width = 1600,
+     height = 1200)
+fviz_mfa_ind(
+  res_famd_delta,
+  habillage = "odpoved_na_terapii_m0_vs_m6",   # color points by your factor
+  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
+  addEllipses = TRUE,
+  ellipse.type = "confidence",
+  repel = FALSE,   # do not show text labels
+  geom = "point"   # only draw points, no text
+) +
+  theme_minimal(base_size = 16) +   # increases all text size (titles, axis, legend)
+  theme(
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 18, face = "bold"),
+    legend.text = element_text(size = 16))
+dev.off()
+
+### UMAP ----
+famd_scores_delta <- res_famd_delta$ind$coord   # numeric low-dim representation
+umap_res_delta <- umap(famd_scores_delta, n_neighbors = 15, min_dist = 0.1)
+
+# tiff("output/figures/cluster analyses/251113_delta_umap_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plot(umap_res_delta, col = as.numeric(d08_delta$podtyp_nemoci_zjednoduseny), pch = 19)
+# dev.off()
+
+d08_delta_2 <- d08_delta |>filter(!is.na(odpoved_na_terapii_m0_vs_m6))
+
+umap_df <- as.data.frame(umap_res_delta) |>
+  setNames(c("UMAP1", "UMAP2")) |>
+  mutate(
+    podtyp = d08_delta_2$podtyp_nemoci_zjednoduseny,
+    mmt8 = d08_delta_2$mmt8_categories,
+    mda = d08_delta_2$mda_categories,
+    odpoved = d08_delta_2$odpoved_na_terapii_m0_vs_m6
+  )
+
+
+vars_to_plot <- c("podtyp", "mmt8", "mda", "odpoved")
+
+walk(vars_to_plot, function(v) {
+  
+  p <- plot_umap(umap_df, v)
+  
+  tiff(
+    filename = paste0("output/figures/cluster analyses/251113_umap_delta_", v, ".tiff"),
+    compression = "lzw",
+    res = 300,
+    width = 1600,
+    height = 1200
+  )
+  print(p)
+  dev.off()
+})
+
+### PLS-DA ----
+# # disease subtype
+# d08_delta_pls_X <- model.matrix(
+#   ~ . - 1,
+#   data = d08_delta_pls |> 
+#     filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#     select(-podtyp_nemoci_zjednoduseny)) 
+# d08_delta_pls_Y <- d08_delta_pls |> 
+#   filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#   select(podtyp_nemoci_zjednoduseny) |> 
+#   pull()
+# 
+# pls_delta <- plsda(d08_delta_pls_X, d08_delta_pls_Y, 
+#                    ncomp = 2, scale = TRUE)
+# 
+# ## visualization
+# tiff("output/figures/cluster analyses/251113_delta_pls_subdisease_group_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotIndiv(pls_delta, comp = c(1,2), 
+#           group = d08_delta_pls_Y,ellipse = TRUE, 
+#           legend=T) 
+# dev.off()
+# tiff("output/figures/cluster analyses/251113_delta_pls_subdisease_contrib_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotLoadings(pls_delta, contrib = 'max', method = 'median')
+# dev.off()
+# 
+# # response to treatmetn
+# d08_delta_pls_X_trt <- model.matrix(
+#   ~ . - 1,
+#   data = d08_delta_pls |> 
+#     filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#     select(-odpoved_na_terapii_m0_vs_m6)) 
+# d08_delta_pls_Y_trt <- d08_delta_pls |> 
+#   filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
+#   select(odpoved_na_terapii_m0_vs_m6) |> 
+#   pull()
+# 
+# pls_delta_trt <- plsda(d08_delta_pls_X_trt, d08_delta_pls_Y_trt, 
+#                        ncomp = 2, scale = TRUE)
+# 
+# ## visualization
+# tiff("output/figures/cluster analyses/251113_delta_pls_response_group_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotIndiv(pls_delta_trt, comp = c(1,2), group = d08_delta_pls_Y_trt, ellipse = TRUE, legend=T)
+# dev.off()
+# tiff("output/figures/cluster analyses/251113_delta_pls_response_contrib_01.tiff", 
+#      compression = "lzw",
+#      res = "300",
+#      width = 1600,
+#      height = 1200)
+# plotLoadings(pls_delta_trt, contrib = 'max', method = 'median')
+# dev.off()
+
+source("scripts/cluster_plsda_pipeline.R")
+
+pls_delta_results <- run_all_plsda(
+  df = d08_delta_pls,
+  prefix = "251113_delta_pls"
+)
 
 
 

@@ -4,28 +4,7 @@ back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
 # 251016 ----
-## Delta ----
-d08_delta <- d08_imp |> 
-  pivot_wider(
-    names_from = poradie_vysetrenia,
-    values_from = where(is.numeric)
-  ) |> 
-  mutate(across(ends_with("M6"), 
-                .fns = ~ . - get(str_replace(cur_column(), "M6$", "M0")),
-                .names = "{str_remove(.col, 'M6$')}_delta")) |>
-  select(projekt_id, where(is.factor), ends_with("_delta"), 
-         -odpoved_na_terapii_m0_vs_m6_delta, -vek__delta, -trvani_nemoci__delta) |> 
-  left_join(d08_imp |> filter(poradie_vysetrenia == "M0") |>
-              select(projekt_id, vek, trvani_nemoci) |> 
-              distinct(),
-            by = "projekt_id") |> 
-  relocate(vek, trvani_nemoci, .before = mitax__delta) |> 
-  tibble::column_to_rownames("projekt_id") |>
-  mutate(
-    across(where(is.numeric), ~scale(.x)),
-    across(where(is.factor),
-           ~ forcats::fct_relabel(.x, function(lvl) paste0(cur_column(), "_", lvl)))) |> 
-  droplevels()
+
 
 res_famd_delta <- FAMD(
   # d08_delta |> select( -odpoved_na_terapii_m0_vs_m6),
@@ -68,23 +47,7 @@ umap_res_delta <- umap(famd_scores_delta, n_neighbors = 15, min_dist = 0.1)
 plot(umap_res_delta, col = as.numeric(d08_delta$podtyp_nemoci_zjednoduseny), pch = 19)
 
 
-## PLS-DA ----
-d08_delta_pls <-d08_delta <- d08_imp |> 
-  pivot_wider(
-    names_from = poradie_vysetrenia,
-    values_from = where(is.numeric)
-  ) |> 
-  mutate(across(ends_with("M6"), 
-                .fns = ~ . - get(str_replace(cur_column(), "M6$", "M0")),
-                .names = "{str_remove(.col, 'M6$')}_delta")) |>
-  select(projekt_id, where(is.factor), ends_with("_delta"), 
-         -odpoved_na_terapii_m0_vs_m6_delta, -vek__delta, -trvani_nemoci__delta) |> 
-  left_join(d08_imp |> filter(poradie_vysetrenia == "M0") |>
-              select(projekt_id, vek, trvani_nemoci) |> 
-              distinct(),
-            by = "projekt_id") |> 
-  relocate(vek, trvani_nemoci, .before = mitax__delta) |> 
-  tibble::column_to_rownames("projekt_id")
+
 
 d08_delta_pls_X <- model.matrix(
   ~ . - 1,
@@ -125,14 +88,7 @@ plotLoadings(pls_delta_trt, contrib = 'max', method = 'median')
 
 # save.image("data/251016_data_01.RData")
 
-path_response_01 <- file_to_load(phrase = "Treatment Response", 
-                    folder_path = folder_path)
-d07 <- import(path_response_01 |> tail(1)) |> 
-  janitor::clean_names() |> 
-  mutate(across(where(is.character), ~na_if(.x, "x")),
-         projekt_id = as.factor(projekt_id),
-         across(where(is.character), as.numeric)) |> 
-  droplevels()
+
 
 d07 <- import("C:/Users/Baloun/Documents/Temporaly/Treatment Response_sérum,expr_pre STAT .xlsx") |>
   janitor::clean_names() |> 
@@ -154,125 +110,16 @@ sel_val_02 <- c("projekt ID", "Poradie vyšetrenia", "Věk", "Pohlaví", "Trván
                 "Lean Body Mass", "BCM", "ECM/BCM Index", "% cell share")
 
 
-d08_imp <- d02_clinics |> 
-  filter(projekt_id != "IMMET_40") |>     # má jenom jedno měření, v M0
-  select(all_of(janitor::make_clean_names(sel_val_02))) |> 
-  select(-odpoved_na_terapii_m0_vs_m6) |> # mohl bych odstranit, ale kvůli komplitnímu výpisu všech proměnných to udělám takhle
-  group_by(projekt_id) |> 
-  fill(vek, .direction = "downup") |> 
-  fill(jo_1, .direction = "downup") |> 
-  fill(anti_hmgcr, .direction = "downup") |> 
-  ungroup() |> 
-  filter(poradie_vysetrenia %in% c("M0", "M6")) |> 
-  relocate(projekt_id, poradie_vysetrenia, podtyp_nemoci_zjednoduseny, 
-           pohlavi, jo_1, anti_hmgcr) |> 
-  filter(!is.na(podtyp_nemoci_zjednoduseny)) |> 
-  left_join(d07, by = "projekt_id") |> 
-  mutate(across(.cols = projekt_id:anti_hmgcr, ~as.factor(.x))) |> 
-  mice::futuremice(method = "pmm", m=20, n.core = ncores) |>
-  complete() |>
-  left_join(d02_clinics |> 
-              select(projekt_id,odpoved_na_terapii_m0_vs_m6) |> 
-              group_by(projekt_id) |> 
-              fill(odpoved_na_terapii_m0_vs_m6, .direction = "downup") |> 
-              ungroup() |> 
-              unique(), 
-            by = "projekt_id") |> 
-  relocate(odpoved_na_terapii_m0_vs_m6, .before =  pohlavi) 
 
 
-d08_m0 <- d08_imp |> 
-  filter(poradie_vysetrenia == "M0") |> 
-  tibble::column_to_rownames("projekt_id") |>
-  select(-poradie_vysetrenia) |> 
-  mutate(
-    across(where(is.numeric), ~scale(.x)),
-    across(where(is.factor),
-                ~ forcats::fct_relabel(.x, function(lvl) paste0(cur_column(), "_", lvl)))) |> 
-  droplevels()
-
-res_famd_m0 <- FAMD(
-  # d08_m0 |> select( -odpoved_na_terapii_m0_vs_m6),
-  d08_m0 |>filter(!is.na(odpoved_na_terapii_m0_vs_m6)),
-  graph = TRUE
-)
-
-fviz_famd_var(res_famd_m0, repel = TRUE)
-fviz_contrib(res_famd_m0, "var", axes = 1)
-
-fviz_famd_var(res_famd_m0, "quanti.var", col.var = "contrib", 
-              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-              repel = TRUE)
-fviz_famd_var(res_famd_m0, "quali.var", col.var = "contrib", 
-              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-              repel = TRUE)
-fviz_mfa_ind(
-  res_famd_m0,
-  habillage = "podtyp_nemoci_zjednoduseny",   # color points by your factor
-  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
-  addEllipses = TRUE,
-  ellipse.type = "confidence",
-  repel = FALSE,   # do not show text labels
-  geom = "point"   # only draw points, no text
-)
-fviz_mfa_ind(
-  res_famd_m0,
-  habillage = "odpoved_na_terapii_m0_vs_m6",   # color points by your factor
-  palette = c("#00AFBB", "#E7B800", "#FC4E07", "#8B4513"),  # optional extra color for 4 levels
-  addEllipses = TRUE,
-  ellipse.type = "confidence",
-  repel = FALSE,   # do not show text labels
-  geom = "point"   # only draw points, no text
-)
-
-## UMAP ----
-famd_scores_m0 <- res_famd_m0$ind$coord   # numeric low-dim representation
-
-umap_res_m0 <- umap(famd_scores_m0, n_neighbors = 15, min_dist = 0.1)
-plot(umap_res_m0, col = as.numeric(d08_m0$podtyp_nemoci_zjednoduseny), pch = 19)
 
 
-## PLS-DA ----
-d08_m0_pls <- d08_imp |> 
-  filter(poradie_vysetrenia == "M0") |> 
-  tibble::column_to_rownames("projekt_id") |>
-  select(-poradie_vysetrenia)
-
-d08_m0_pls_X <- model.matrix(
-  ~ . - 1,
-  data = d08_m0_pls |> 
-  filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
-  select(-podtyp_nemoci_zjednoduseny)) 
-d08_m0_pls_Y <- d08_m0_pls |> 
-  filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
-  select(podtyp_nemoci_zjednoduseny) |> 
-  pull()
-
-pls_m0 <- plsda(d08_m0_pls_X, d08_m0_pls_Y, 
-             ncomp = 2, scale = TRUE)
-
-# vizualizace
-plotIndiv(pls_m0, comp = c(1,2), group = d08_m0_pls_Y, ellipse = TRUE, legend=T)
-plotLoadings(pls_m0, contrib = 'max', method = 'median')
 
 
-### response to treatmetn ----
-d08_m0_pls_X_trt <- model.matrix(
-  ~ . - 1,
-  data = d08_m0_pls |> 
-    filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
-    select(-odpoved_na_terapii_m0_vs_m6)) 
-d08_m0_pls_Y_trt <- d08_m0_pls |> 
-  filter(!is.na(odpoved_na_terapii_m0_vs_m6)) |> 
-  select(odpoved_na_terapii_m0_vs_m6) |> 
-  pull()
 
-pls_m0_trt <- plsda(d08_m0_pls_X_trt, d08_m0_pls_Y_trt, 
-                       ncomp = 2, scale = TRUE)
 
-# vizualizace
-plotIndiv(pls_m0_trt, comp = c(1,2), group = d08_delta_pls_Y_trt, ellipse = TRUE, legend=T)
-plotLoadings(pls_m0_trt, contrib = 'max', method = 'median')
+
+
 
 
 # 250929 ----

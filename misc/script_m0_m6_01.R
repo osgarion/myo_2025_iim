@@ -2,16 +2,15 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse, purrr,conflicted)
 
 ## libraries ----
-pacman::p_load(update = T,  
+pacman::p_load(update = F,  
                equatiomatic, beepr, tictoc, 
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
                lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer,
-               emmeans, openxlsx, GLMMadaptive
+               emmeans, openxlsx, GLMMadaptive, multidplyr
 )
 
-library(rstatix)
 
 # Missing values, multivariate analyses
 pacman::p_load(naniar, MVN) 
@@ -30,14 +29,15 @@ conflicted::conflicts_prefer(
   janitor::clean_names,
   dplyr::relocate,
   lmerTest::lmer,
-  dplyr::recode,
-  GLMMadaptive::predict
+  dplyr::recode
 )
 
 # directories ----
 setwd("F:/Analysis/Vernerová Lucia/myo_2025_iim")
 
-path_export <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251002/m0_m6/"
+# path_export <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251002/m0_m6/"
+path_export <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251017/m0_m6/"
+
 
 dir.create(path_export, recursive = TRUE)
 
@@ -63,7 +63,7 @@ res_mixMod_covar_02 <- d04_sel2 |>
   filter(poradie_vysetrenia %in% c("M0", "M6")) |> 
   # mice::mice("pmm", m = 20, 
   #      maxit = 15, 
-  #      printFlag = F) |> complete() |> 
+  #      printFlag = F) |> mice::complete() |> 
   pivot_longer(cols = any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
                names_to = "var_dep_name",
                values_to = "var_dep_value") |> 
@@ -282,6 +282,40 @@ res_mixMod_covar_02_sub_creatine <- res_mixMod_covar_02 |>
                           plot_lmer_grid_basic_02)
   )
 
+### gk + vek  ----
+res_mixMod_covar_02_sub_gk_age <- res_mixMod_covar_02 |> 
+  select(var_dep_name, var_indep_name, data) |> 
+  inner_join(res_mixMod_covar_02_tab_gk |> 
+               filter(if_any(last_col(), ~ . < 0.06)) |> 
+               select(var_dep_name, var_indep_name),
+             by = c("var_dep_name", "var_indep_name")) |> 
+  mutate(fig_sex = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw + vek",
+                             covar_spec = "pohlavi"),
+                        plot_lmer_grid_basic_02),
+         fig_sub = pmap(list(data = data, 
+                             ylab = var_dep_name, 
+                             xlab = var_indep_name,
+                             covar = "denna_davka_gk_mg_kg_bw + vek",
+                             covar_spec = "podtyp_nemoci_zjednoduseny"),
+                        plot_lmer_grid_basic_02),
+         fig_jo = pmap(list(data = data, 
+                            ylab = var_dep_name, 
+                            xlab = var_indep_name,
+                            covar = "denna_davka_gk_mg_kg_bw + vek",
+                            covar_spec = "jo_1"),
+                       plot_lmer_grid_basic_02),
+         fig_hmgcr = pmap(list(data = data, 
+                               ylab = var_dep_name, 
+                               xlab = var_indep_name,
+                               covar = "denna_davka_gk_mg_kg_bw + vek",
+                               covar_spec = "anti_hmgcr"),
+                          plot_lmer_grid_basic_02)
+  )
+
+
 # export ----
 ## table ----
 export(res_mixMod_covar_02_tab_confounders, 
@@ -382,3 +416,28 @@ dev.off()
 pdf(paste0(path_export_gk, "anti_hgmcr.pdf"), width = 15, height = 8)
 walk(res_mixMod_covar_02_sub_gk$fig_hmgcr,print)
 dev.off()
+
+## gk + vek----
+path_export_gk_age <- paste0(path_export,"gk_age/")
+dir.create(path_export_gk_age, recursive = TRUE)
+
+### sex ----
+pdf(paste0(path_export_gk_age, "sex.pdf"), width = 15, height = 8)
+walk(res_mixMod_covar_02_sub_gk_age$fig_sex,print)
+dev.off()
+
+### subdiag ----
+pdf(paste0(path_export_gk_age, "subdiag.pdf"), width = 15, height = 8)
+walk(res_mixMod_covar_02_sub_gk_age$fig_sub,print)
+dev.off()
+
+### jo_1 ----
+pdf(paste0(path_export_gk_age, "jo_1.pdf"), width = 15, height = 8)
+walk(res_mixMod_covar_02_sub_gk_age$fig_jo,print)
+dev.off()
+
+### anti_hgmcr ----
+pdf(paste0(path_export_gk_age, "anti_hgmcr.pdf"), width = 15, height = 8)
+walk(res_mixMod_covar_02_sub_gk_age$fig_hmgcr,print)
+dev.off()
+
