@@ -1,4 +1,65 @@
-.Rproj.user
+# =========================
+# R / RStudio
+# =========================
+.Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
+
+# =========================
+# renv
+# =========================
+renv/library/
+renv/python/
+renv/staging/
+
+# =========================
+# OS / editor
+# =========================
+.DS_Store
+Thumbs.db
+*~
+
+# =========================
+# Cache / temp
+# =========================
+tmp/
+temp/
+cache/
+*.log
+
+# =========================
+# Output – automaticky generované
+# =========================
+output/
+results/
+tables/
+figures/draft/
+figures/tmp/
+
+# =========================
+# Large / binary outputs
+# =========================
+*.tiff
+*.tif
+*.pptx
+
+# =========================
+# Tabulky – generované
+# =========================
+*.xlsx
+*.xls
+
+# =========================
+# Data (citlivá / velká)
+# =========================
+data/raw/
+data/interim/
+data/processed/
+
+# =========================
+# Allowlist (explicitně verzované)
+# =========================
+!figures/final/
+!figures/final/*.png
+!figures/final/*.pdf
