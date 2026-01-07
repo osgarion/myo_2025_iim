@@ -44,6 +44,7 @@ folder_path <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Dat
 path_myo_01 <- file_to_load(phrase = "Myokiny", 
                             folder_path = folder_path)
 
+
 d01_myokiny <- import(path_myo_01) |>
   # relocate(`věk skupiny`, .before = `věk k M0`) |> 
   select(!starts_with("d")) |> 
@@ -106,18 +107,6 @@ d02_clinics <- import(path_clin_01 |> tail(1)) |>
   group_by(bbm_id) |> 
   fill(kurak_nejmene_100_cigaret) |> 
   ungroup()
-
-var_name_01_mda <- import(path_clin_01 |> tail(1), which = "251118_MDAcategories") |> 
-  mutate(abbreviation = janitor::make_clean_names(abbreviation))
-
-var_name_01_mmt8 <- import(path_clin_01 |> tail(1), which = "251118_MMT8categories") |> 
-  mutate(abbreviation = janitor::make_clean_names(abbreviation))
-
-var_name <- bind_rows(var_name_01_mda, var_name_01_mmt8) |> distinct()
-
-rename_vec <- var_name$abbreviation
-names(rename_vec) <- var_name$name_en
-
 
 d05_norm <- import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Data/MSTN normalizácia na kreat, BCM.xlsx") |> 
   mutate(across(where(is.character), ~na_if(.x, "x"))) |> 
@@ -270,8 +259,7 @@ d08_delta <- d08_imp |>
            ~ forcats::fct_relabel(.x, function(lvl) paste0(cur_column(), "_", lvl)))) |> 
   droplevels()
 
-
-### PLS-DA ----
+# PLS-DA ----
 d08_delta_pls <- d08_imp |> 
   select(-mda_categories, -mmt8_categories, -contains(sel_remove_01)) |> 
   left_join(
@@ -298,143 +286,7 @@ d08_delta_pls <- d08_imp |>
   relocate(vek, trvani_nemoci, .before = mitax__delta) |> 
   tibble::column_to_rownames("projekt_id")
 
-
-## cluster analyses 2 ----
-### imputation ----
-d09_imp <- d02_clinics |> 
-  filter(projekt_id != "IMMET_40") |>     # má jenom jedno měření, v M0
-  group_by(projekt_id) |> 
-  fill(vek, .direction = "downup") |> 
-  fill(jo_1, .direction = "downup") |> 
-  fill(anti_hmgcr, .direction = "downup") |> 
-  ungroup() |> 
-  filter(poradie_vysetrenia %in% c("M0", "M6")) |> 
-  relocate(projekt_id, poradie_vysetrenia,  
-           pohlavi, jo_1, anti_hmgcr) |> 
-  select(any_of(var_name$abbreviation)) |> 
-  mutate(across(where(is_01_col), ~ as.factor(.x))) |> 
-  futuremice_safe(method = "pmm", m = ncores, workers = ncores) |> 
-  complete() |>
-  relocate( mda_categories, mmt8_categories, .before =  pohlavi) 
-
-### M0 ----
-d09_m0 <- d09_imp |> 
-  filter(poradie_vysetrenia == "M0") |> 
-  left_join(d07, 
-            by = "projekt_id") |> 
-  futuremice_safe(method = "pmm", m = ncores, workers = ncores) |> 
-  complete() |> 
-  tibble::column_to_rownames("projekt_id") |>
-  select(-poradie_vysetrenia) |> 
-  mutate(
-    across(where(is.numeric), ~scale(.x)),
-    across(where(is.factor),
-           ~ forcats::fct_relabel(.x, function(lvl) paste0(cur_column(), "_", lvl)))) |> 
-  droplevels() |> 
-  mutate(across(everything(), ~ if(is.matrix(.x) && ncol(.x) == 1) .x[,1] else .x))
-
-# measured once
-sel_remove_01 <- c("mstn", "fst", "fstl3", "acvr1b", "acvr2b", "acvr2a", "smad2",
-                   "smad3", "smad4", "foxo1", "trim63", "fbxo32", "akta")
-
-# PLS-DA 
-d09_m0_pls <- d09_imp |> 
-  filter(poradie_vysetrenia == "M0") |> 
-  left_join(d09_m0 |> 
-              rownames_as_column("projekt_id") |> 
-              select(projekt_id, contains(sel_remove_01)) |> 
-              tibble(), 
-            by = "projekt_id") |> 
-  tibble::column_to_rownames("projekt_id") |>
-  select(-poradie_vysetrenia)
-
-### delta ----
-d09_delta <- d09_imp |>
-  group_by(projekt_id) |>
-  mutate(
-    across(
-      c(anti_hmgcr, jo_1),
-      ~ ifelse(any(as.character(.x) == "1", na.rm = TRUE), "1", "0")
-    )
-  ) |>
-  ungroup() |>
-  mutate(
-    across(c(anti_hmgcr, jo_1), ~ factor(.x, levels = c("0", "1")))
-  )|> 
-  select(-vek, -trvani_nemoci, -mda_categories, -mmt8_categories, -contains(sel_remove_01)) |> 
-  left_join(
-    d09_imp |> 
-      filter(poradie_vysetrenia == "M6") |> 
-      select(projekt_id, mda_categories, mmt8_categories) |> 
-      droplevels(),
-    by = "projekt_id"
-  ) |> 
-  relocate(mda_categories, mmt8_categories, .before = pohlavi) |> 
-  pivot_wider(
-    names_from = poradie_vysetrenia,
-    values_from = where(is.numeric)
-  ) |> 
-  mutate(across(ends_with("M6"), 
-                .fns = ~ . - get(str_replace(cur_column(), "M6$", "M0")),
-                .names = "{str_remove(.col, 'M6$')}delta")) |>
-  select(projekt_id, where(is.factor), ends_with("_delta")) |> 
-  left_join(d09_imp |> filter(poradie_vysetrenia == "M0") |>
-              select(projekt_id, vek, trvani_nemoci) |> 
-              distinct(),
-            by = "projekt_id") |> 
-  relocate(vek, trvani_nemoci, .before = mitax_delta) |> 
-  tibble::column_to_rownames("projekt_id") |>
-  mutate(
-    across(where(is.numeric), ~scale(.x)),
-    across(where(is.factor),
-           ~ forcats::fct_relabel(.x, function(lvl) paste0(cur_column(), "_", lvl)))) |> 
-  droplevels()  |> 
-  mutate(across(everything(), ~ if(is.matrix(.x) && ncol(.x) == 1) .x[,1] else .x)) |> 
-  rename_with(~ str_remove(., "_delta"), everything())
-
-
-### PLS-DA ----
-d09_delta_pls <-  d09_imp |>
-  group_by(projekt_id) |>
-  mutate(
-    across(
-      c(anti_hmgcr, jo_1),
-      ~ ifelse(any(as.character(.x) == "1", na.rm = TRUE), "1", "0")
-    )
-  ) |>
-  ungroup() |>
-  mutate(
-    across(c(anti_hmgcr, jo_1), ~ factor(.x, levels = c("0", "1")))
-  )|> 
-  select(-vek, -trvani_nemoci, -mda_categories, -mmt8_categories, -contains(sel_remove_01)) |> 
-  left_join(
-    d09_imp |> 
-      filter(poradie_vysetrenia == "M6") |> 
-      select(projekt_id, mda_categories, mmt8_categories) |> 
-      droplevels(),
-    by = "projekt_id"
-  ) |> 
-  relocate(mda_categories, mmt8_categories, .before = pohlavi) |> 
-  pivot_wider(
-    names_from = poradie_vysetrenia,
-    values_from = where(is.numeric)
-  ) |> 
-  mutate(across(ends_with("M6"), 
-                .fns = ~ . - get(str_replace(cur_column(), "M6$", "M0")),
-                .names = "{str_remove(.col, 'M6$')}delta")) |>
-  select(projekt_id, where(is.factor), ends_with("_delta")) |> 
-  left_join(d09_imp |> filter(poradie_vysetrenia == "M0") |>
-              select(projekt_id, vek, trvani_nemoci) |> 
-              distinct(),
-            by = "projekt_id") |> 
-  relocate(vek, trvani_nemoci, .before = mitax_delta) |> 
-  tibble::column_to_rownames("projekt_id") |>
-  droplevels()  |> 
-  mutate(across(everything(), ~ if(is.matrix(.x) && ncol(.x) == 1) .x[,1] else .x)) |> 
-  rename_with(~ str_remove(., "_delta"), everything()) 
-
-
-# selection ----
+# selection 
 d04_sel1 <- d03 |>
   mutate(
     odpoved_na_terapii_m0_vs_m6 =

@@ -928,43 +928,6 @@ plot_umap <- function(df, var) {
     labs(color = var, title = paste("UMAP –", var))
 }
 
-run_umap_plot <- function(model_famd, data, variable_to_plot) {
-  
-  # 1) Extract FAMD scores
-  famd_scores <- model_famd$ind$coord
-  
-  # 2) Run UMAP
-  umap_res <- umap::umap(famd_scores, n_neighbors = 15, min_dist = 0.1)
-  
-  # 3) Prepare dataframe
-  umap_df <- as.data.frame(umap_res$layout) |>
-    dplyr::rename(UMAP1 = V1, UMAP2 = V2) |>
-    dplyr::mutate(
-      !!variable_to_plot := data[[variable_to_plot]]
-    )
-  
-  # 4) Create plot
-  p <- plot_umap(umap_df, variable_to_plot)
-  
-  # 5) Save figure
-  tiff(
-    filename = paste0("output/figures/cluster analyses/",
-                      format(Sys.Date(), "%y%m%d"),
-                      "_umap_",
-                      variable_to_plot,
-                      ".tiff"),
-    compression = "lzw",
-    res = 300,
-    width = 1600,
-    height = 1200
-  )
-  print(p)
-  dev.off()
-  
-  message("Saved: ", variable_to_plot)
-}
-
-
 
 # tables ----
 ## column with 0, 1, and NA ----
@@ -1270,29 +1233,6 @@ model_covar_3 <- function(data, covar, filter_na = TRUE) {
               model = mod1)
   )
   
-}
-
-futuremice_safe <- function(data, method = "pmm", m = 20, maxit = 15, workers = 4) {
-  # Zruš zbytky starých paralelních procesů
-  future::plan(future::sequential)
-  gc()
-  
-  # Nastav paralelní plán
-  future::plan(future::multisession, workers = workers)
-  
-  # Spusť imputaci
-  imp <- mice::futuremice(
-    data,
-    method = method,
-    m = m,
-    maxit = maxit
-  )
-  
-  # Po skončení vypni workery
-  future::plan(future::sequential)
-  
-  # Vrací kompletní data (defaultně první set, můžeš změnit)
-  mice::complete(imp)
 }
 
 ## skimr ----
