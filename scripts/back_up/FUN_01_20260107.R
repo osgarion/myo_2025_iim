@@ -6,12 +6,11 @@ pacman::p_load(update = T,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
                kableExtra, skimr, GGally, testthat, factoextra, gplots, uwot,
                lmerTest, dlookr, multilevelmod,furrr,ggforce, lazyWeave, paletteer,
-               emmeans, openxlsx, GLMMadaptive, FactoMineR, cluster, mixOmics,
-               mice
+               emmeans, openxlsx, GLMMadaptive, FactoMineR, cluster, mixOmics
 )
 
 # Missing values, multivariate analyses
-pacman::p_load(naniar, MVN, visdat) 
+pacman::p_load(naniar, MVN) 
 
 ## function specification ----
 conflicted::conflicts_prefer(
