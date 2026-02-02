@@ -63,3 +63,7 @@ data/processed/
 !figures/final/
 !figures/final/*.png
 !figures/final/*.pdf
+!tables/final/
+!tables/final/*.xlsx
+!tables/final/*.xls
+!tables/final/*.csv

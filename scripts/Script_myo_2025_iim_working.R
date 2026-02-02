@@ -3,9 +3,42 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
+# 260124 ----
+# ============================================================
+# MOFA2: activity + clinical (from d12_mofa; complete script)
+# ============================================================
+
+library(dplyr)
+library(MOFA2)
+
+# --- 0) input table (as you requested) ----
+
+
+
+
+
+
+# mofa_obj <- set_data_options(mofa_obj, data_opts)
+# mofa_obj <- set_model_options(mofa_obj, model_opts)
+# mofa_obj <- set_training_options(mofa_obj, train_opts)
+# 
+
+
+
+
+
 # 260123 ----
-# --- join (aktivita + klinika) ----
-d12_join <- d10_aktivita |>
+# ============================================================
+# MOFA2: unsupervised latent factors (aktivita + klinika)
+# ============================================================
+# Install once if needed:
+# if (!requireNamespace("MOFA2", quietly = TRUE)) remotes::install_github("bioFAM/MOFA2")
+
+library(dplyr)
+library(MOFA2)
+
+# --- 1) same join as above (NA-free recommended for first run) ----
+d12_mofa <- d10_aktivita |>
   transmute(
     immet_id   = as.character(sample),
     exam_order = as.character(exam),
@@ -21,56 +54,105 @@ d12_join <- d10_aktivita |>
     by = c("immet_id", "exam_order")
   ) |>
   distinct() |>
-  na.omit() |> 
+  na.omit() |>
   group_by(immet_id) |>
   filter(n() == 2) |>
   ungroup()
 
-# --- X columns = numeric columns from activity table only (prevents mixing) ----
-x_cols_cca <- d10_aktivita |>
-  select(where(is.numeric)) |>
-  names()
+# --- 2) sample IDs (must be unique) ----
+sample_ids <- paste(d12_mofa$immet_id, d12_mofa$exam_order, sep = "_")
 
-# --- X matrix ----
-X_cca <- d12_join |>
-  select(all_of(x_cols_cca)) |>
+# --- 3) activity view ----
+x_cols_act <- d10_aktivita |> select(where(is.numeric)) |> names()
+X_act <- d12_mofa |>
+  select(all_of(x_cols_act)) |>
   as.matrix()
+rownames(X_act) <- sample_ids
 
-# --- Y df = everything else except keys and X ----
-Y_df_cca <- d12_join |>
-  select(-c(immet_id, exam_order), -all_of(x_cols_cca))
+# --- 4) clinical view (numeric + factors -> one-hot) ----
+Y_cli_df <- d12_mofa |>
+  select(-c(immet_id, exam_order), -all_of(x_cols_act))
 
-# --- design matrix (one-hot) ----
-Y_cca <- model.matrix(~ . - 1, data = Y_df_cca)
-
-stopifnot(nrow(X_cca) == nrow(Y_cca))
-
-# vyhodit sloupce bez variability
-drop_const_cols <- function(M) {
-  s <- apply(M, 2, sd, na.rm = TRUE)
-  keep <- is.finite(s) & s > 0
-  M[, keep, drop = FALSE]
-}
-
-X_cca <- drop_const_cols(X_cca)
-Y_cca <- drop_const_cols(Y_cca)
-
-# --- scaling ----
-X_cca <- scale(X_cca)
-Y_cca <- scale(Y_cca)
-
-# --- CCA (PMA; penalizace jen pro X v tvé verzi) ----
-set.seed(123)
-cca_fit <- PMA::CCA(X_cca, Y_cca, typex = "standard", penaltyx = 0.4, K = 2)
-
-cca_fit$cancor
-
-# --- regularized CCA (mixOmics; ridge/shrinkage) ----
-rcc_fit <- mixOmics::rcc(
-  X_cca, Y_cca,
-  ncomp  = 2,
-  method = "shrinkage"
+# keep subtype as metadata rather than features (recommended)
+meta <- tibble(
+  sample_id = sample_ids,
+  immet_id  = d12_mofa$immet_id,
+  exam      = d12_mofa$exam_order,
+  subtype   = as.factor(d12_mofa$disease_subtype)
 )
+
+Y_cli_df_feat <- Y_cli_df |>
+  select(-disease_subtype)
+
+X_cli <- model.matrix(~ . - 1, data = Y_cli_df_feat)
+rownames(X_cli) <- sample_ids
+
+# --- 5) transpose to MOFA format: features x samples ----
+# MOFA expects a list of matrices with features in rows and samples in columns
+views <- list(
+  activity = t(scale(X_act)),  # features x samples
+  clinical = t(scale(X_cli))   # features x samples
+)
+
+# optional: drop constant features after scaling
+drop_const_rows <- function(M) {
+  s <- apply(M, 1, sd, na.rm = TRUE)
+  keep <- is.finite(s) & s > 0
+  M[keep, , drop = FALSE]
+}
+views$activity <- drop_const_rows(views$activity)
+views$clinical <- drop_const_rows(views$clinical)
+
+# --- 6) create MOFA object ----
+mofa <- create_mofa(views)
+
+# --- 7) set options ----
+data_opts <- get_default_data_options(mofa)
+model_opts <- get_default_model_options(mofa)
+train_opts <- get_default_training_options(mofa)
+
+model_opts$num_factors <- 5   # start with 5; adjust
+train_opts$seed <- 123
+train_opts$convergence_mode <- "fast"
+
+mofa <- prepare_mofa(
+  object = mofa,
+  data_options = data_opts,
+  model_options = model_opts,
+  training_options = train_opts
+)
+
+# --- 8) train ----
+mofa_trained <- run_mofa(mofa, use_basilisk = TRUE)
+
+# --- 9) downstream: factors and weights ----
+factors <- MOFA2::get_factors(mofa_trained, factors = "all")$group1  # samples x factors
+weights <- MOFA2::get_weights(mofa_trained, factors = "all")         # list per view
+
+# --- 10) built-in plots (color by subtype / exam) ----
+plot_factors(
+  mofa_trained,
+  factors = 1:2,
+  color_by = "subtype",
+  metadata = meta
+)
+
+plot_factors(
+  mofa_trained,
+  factors = 1:2,
+  color_by = "exam",
+  metadata = meta
+)
+
+plot_variance_explained(mofa_trained)
+
+# Top features driving Factor 1 in each view
+plot_weights(mofa_trained, view = "activity", factor = 1, nfeatures = 15)
+plot_weights(mofa_trained, view = "clinical", factor = 1, nfeatures = 15)
+
+
+
+
 
 rcc_fit$cor
 rcc_fit$lambda
@@ -78,8 +160,123 @@ rcc_fit$lambda
 rcc_fit$variates$X[, 1]
 rcc_fit$variates$Y[, 1]
 
-sort(rcc_fit$loadings$X[, 1], decreasing = TRUE)[1:10]
-sort(rcc_fit$loadings$Y[, 1], decreasing = TRUE)[1:10]
+
+
+
+# --- 0) pomocné objekty ----
+scores_df <- tibble(
+  immet_id   = d12_join$immet_id,
+  exam_order = d12_join$exam_order,
+  X1 = rcc_fit$variates$X[, 1],
+  Y1 = rcc_fit$variates$Y[, 1],
+  X2 = rcc_fit$variates$X[, 2],
+  Y2 = rcc_fit$variates$Y[, 2]
+)
+
+
+# --- 1) Scatter: kanonické skóre X vs Y (komponenta 1) ----
+
+
+# --- 2) Párování M0 vs M6: změna skóre v čase (spaghetti) ----
+scores_wide <- scores_df |>
+  filter(exam_order %in% c("M0", "M6")) |>
+  select(immet_id, exam_order, X1, Y1, X2, Y2) |>
+  pivot_wider(names_from = exam_order, values_from = c(X1, Y1, X2, Y2))
+
+# X1 změna
+scores_wide |>
+  pivot_longer(cols = c(X1_M0, X1_M6), names_to = "exam", values_to = "value") |>
+  mutate(exam = ifelse(exam == "X1_M0", "M0", "M6")) |>
+  ggplot(aes(exam, value, group = immet_id)) +
+  geom_line(alpha = 0.4) +
+  geom_point(alpha = 0.8) +
+  labs(
+    title = "rCCA: X variate 1 change (M0 → M6)",
+    x = NULL, y = "X variate 1"
+  ) +
+  sjPlot::theme_sjplot2()
+
+# --- 3) Barplot: Top loadings (X blok) komponenta 1 ----
+topX <- tibble(
+  var = colnames(X_cca),
+  loading = rcc_fit$loadings$X[, 1]
+) |>
+  arrange(desc(abs(loading))) |>
+  slice(1:15) |>
+  mutate(var = reorder(var, loading))
+
+ggplot(topX, aes(var, loading)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top X loadings (Component 1)",
+    x = NULL, y = "Loading"
+  ) +
+  sjPlot::theme_sjplot2()
+
+
+# --- 4) Barplot: Top loadings (Y blok) komponenta 1 ----
+topY <- tibble(
+  var = colnames(Y_cca),
+  loading = rcc_fit$loadings$Y[, 1]
+) |>
+  arrange(desc(abs(loading))) |>
+  slice(1:20) |>
+  mutate(var = reorder(var, loading))
+
+ggplot(topY, aes(var, loading)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top Y loadings (Component 1)",
+    x = NULL, y = "Loading"
+  ) +
+  sjPlot::theme_sjplot2()
+
+
+
+# --- 6) Tabulka: top loadings + znaménko ----
+topX_tab <- tibble(
+  var = colnames(X_cca),
+  loading = rcc_fit$loadings$X[, 1]
+) |>
+  arrange(desc(abs(loading))) |>
+  slice(1:20)
+
+topY_tab <- tibble(
+  var = colnames(Y_cca),
+  loading = rcc_fit$loadings$Y[, 1]
+) |>
+  arrange(desc(abs(loading))) |>
+  slice(1:30)
+
+topX_tab
+topY_tab
+
+
+# vyber top proměnné (už je máš)
+load_X <- topX_tab |> mutate(type = "Activity")
+load_Y <- topY_tab |> mutate(type = "Clinical")
+
+load_df <- bind_rows(load_X, load_Y)
+
+ggplot(load_df, aes(x = loading, y = reorder(var, loading), fill = type)) +
+  geom_col(alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~type, scales = "free_y") +
+  labs(
+    x = "Loading (Canonical component 1)",
+    y = NULL,
+    title = "Opposing poles of the latent activity–clinical axis",
+    subtitle = "Variables on opposite sides represent contrasting disease features"
+  ) +
+  theme_minimal(base_size = 13)
+
+
+
+
+##
+
 
 
 # 251016 ----
