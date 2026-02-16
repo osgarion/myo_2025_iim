@@ -1730,6 +1730,7 @@ format_corr_table <- function(cor_df) {
 possLMER <- possibly(.f=lmer, otherwise = NA_real_)
 possmixMODmmt <- possibly(mod_mixMODmmt, otherwise = NULL)
 # possMODELCOMP <- possibly(.f=model_comp, otherwise = NA_real_)
+possCLMM <- possibly(.f = ordinal::clmm, otherwise = NA_real_)
 
 ## tidymodels ----
 lmer_mod <- 
