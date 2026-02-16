@@ -40,6 +40,13 @@ figures/tmp/
 # =========================
 # Large / binary outputs
 # =========================
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.pdf
 *.tiff
 *.tif
 *.pptx
@@ -47,6 +54,8 @@ figures/tmp/
 # =========================
 # Tabulky – generované
 # =========================
+*.csv
+*.tsv
 *.xlsx
 *.xls
 
@@ -62,8 +71,16 @@ data/processed/
 # =========================
 !figures/final/
 !figures/final/*.png
+!figures/final/*.jpg
+!figures/final/*.jpeg
+!figures/final/*.gif
+!figures/final/*.bmp
+!figures/final/*.svg
+!figures/final/*.tif
+!figures/final/*.tiff
 !figures/final/*.pdf
 !tables/final/
+!tables/final/*.csv
+!tables/final/*.tsv
 !tables/final/*.xlsx
 !tables/final/*.xls
-!tables/final/*.csv
