@@ -133,7 +133,7 @@ vis_miss(d11_clinics |>
 #### Data preparation ----
 # **********************************************************************
 x_cols_corr_activ <- d10_aktivita |>
-  dplyr::select(where(is.numeric)) |>
+  dplyr::select(where(is.numeric),-M) |>
   names()
 
 y_cols_corr_activ <- d11_clinics_imp |>
@@ -194,8 +194,10 @@ corr_res_all_activ <- make_corr_heatmap_kendall(
   d_join = d12_join_all_activ,
   x_cols = x_cols_corr_activ,
   y_cols = y_cols_corr_activ,
-  title_suffix = "AKTIVITA: ALL"
+  title_suffix = "AKTIVITA: ALL",
+  legend_df = d11_legend
 )
+
 cor_df_all_activ  <- corr_res_all_activ$cor_df
 (fig_cor_all_activ <- corr_res_all_activ$fig)
 
@@ -203,7 +205,8 @@ corr_res_m0_activ <- make_corr_heatmap_kendall(
   d_join = d12_join_m0_activ,
   x_cols = x_cols_corr_activ,
   y_cols = y_cols_corr_activ,
-  title_suffix = "AKTIVITA: M0"
+  title_suffix = "AKTIVITA: M0",
+  legend_df = d11_legend
 )
 cor_df_m0_activ  <- corr_res_m0_activ$cor_df
 (fig_cor_m0_activ <- corr_res_m0_activ$fig)
@@ -212,7 +215,8 @@ corr_res_m6_activ <- make_corr_heatmap_kendall(
   d_join = d12_join_m6_activ,
   x_cols = x_cols_corr_activ,
   y_cols = y_cols_corr_activ,
-  title_suffix = "AKTIVITA: M6"
+  title_suffix = "AKTIVITA: M6",
+  legend_df = d11_legend
 )
 cor_df_m6_activ  <- corr_res_m6_activ$cor_df
 (fig_cor_m6_activ <- corr_res_m6_activ$fig)
@@ -221,7 +225,8 @@ corr_res_delta_activ <- make_corr_heatmap_kendall(
   d_join = d12_join_delta_activ,
   x_cols = x_cols_corr_activ,
   y_cols = y_cols_corr_activ,
-  title_suffix = "AKTIVITA: DELTA (M6 - M0)"
+  title_suffix = "AKTIVITA: DELTA (M6 - M0)",
+  legend_df = d11_legend
 )
 cor_df_delta_activ  <- corr_res_delta_activ$cor_df
 (fig_cor_delta_activ <- corr_res_delta_activ$fig)
@@ -231,28 +236,28 @@ cor_df_delta_activ  <- corr_res_delta_activ$cor_df
 # **********************************************************************
 # figures
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_all.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_all.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_all_activ)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_m0.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_m0.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_m0_activ)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_m6.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_m6.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_m6_activ)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_delta_m6_m0.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_activ_delta_m6_m0.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_delta_activ)
@@ -262,25 +267,25 @@ dev.off()
 # corr_table_all_activ <- format_corr_table(cor_df_all_activ)
 # rio::export(
 #   corr_table_all_activ,
-#   file.path("output/tables/final", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_ALL.xlsx"))
+#   file.path("output/tables", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_ALL.xlsx"))
 # )
 # 
 # corr_table_m0_activ <- format_corr_table(cor_df_m0_activ)
 # rio::export(
 #   corr_table_m0_activ,
-#   file.path("output/tables/final", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_M0.xlsx"))
+#   file.path("output/tables", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_M0.xlsx"))
 # )
 # 
 # corr_table_m6_activ <- format_corr_table(cor_df_m6_activ)
 # rio::export(
 #   corr_table_m6_activ,
-#   file.path("output/tables/final", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_M6.xlsx"))
+#   file.path("output/tables", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_M6.xlsx"))
 # )
 # 
 # corr_table_delta_activ <- format_corr_table(cor_df_delta_activ)
 # rio::export(
 #   corr_table_delta_activ,
-#   file.path("output/tables/final", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_DELTA_M6_M0.xlsx"))
+#   file.path("output/tables", paste0(format(Sys.Date(), "%y%m%d"), "_kendall_aktivita_vs_clinical_DELTA_M6_M0.xlsx"))
 # )
 
 
@@ -289,8 +294,15 @@ dev.off()
 # **********************************************************************
 #### Data preparation ----
 # **********************************************************************
-x_cols_corr_time <- d10_cas |>
+x_cols_corr_time <- d10_cas_b |>
   dplyr::select(where(is.numeric)) |>
+  dplyr::select(-m5hr_time, -part5_personsummary_MM_L40M100V400_T5A5_dur_day_spt_min_wei,
+                -starts_with("t400plus_b"), -starts_with("t20_b"), -t30_b1m_time_min,
+                -t30_b5m_time_min, -t30_b10m_time_min,-t40_b1m_time_min,
+                -t40_b5m_time_min, -t40_b10m_time_min, -t100_b1m_time_min, 
+                -t100_b5m_time_min, -t100_b10m_time_min, -starts_with("t400_b"),
+                -t20_time_min, -t30_time_min, -t40_time_min, -t400_time_min
+                ) |>
   names()
 
 y_cols_corr_time <- d11_clinics_imp |>
@@ -351,7 +363,8 @@ corr_res_all_time <- make_corr_heatmap_kendall(
   d_join = d13_join_all_time,
   x_cols = x_cols_corr_time,
   y_cols = y_cols_corr_time,
-  title_suffix = "ČAS: ALL"
+  title_suffix = "ČAS: ALL",
+  legend_df = d11_legend
 )
 cor_df_all_time  <- corr_res_all_time$cor_df
 (fig_cor_all_time <- corr_res_all_time$fig)
@@ -360,7 +373,8 @@ corr_res_m0_time <- make_corr_heatmap_kendall(
   d_join = d13_join_m0_time,
   x_cols = x_cols_corr_time,
   y_cols = y_cols_corr_time,
-  title_suffix = "ČAS: M0"
+  title_suffix = "ČAS: M0",
+  legend_df = d11_legend
 )
 cor_df_m0_time  <- corr_res_m0_time$cor_df
 (fig_cor_m0_time <- corr_res_m0_time$fig)
@@ -369,7 +383,8 @@ corr_res_m6_time <- make_corr_heatmap_kendall(
   d_join = d13_join_m6_time,
   x_cols = x_cols_corr_time,
   y_cols = y_cols_corr_time,
-  title_suffix = "ČAS: M6"
+  title_suffix = "ČAS: M6",
+  legend_df = d11_legend
 )
 cor_df_m6_time  <- corr_res_m6_time$cor_df
 (fig_cor_m6_time <- corr_res_m6_time$fig)
@@ -378,7 +393,8 @@ corr_res_delta_time <- make_corr_heatmap_kendall(
   d_join = d13_join_delta_time,
   x_cols = x_cols_corr_time,
   y_cols = y_cols_corr_time,
-  title_suffix = "ČAS: DELTA (M6 - M0)"
+  title_suffix = "ČAS: DELTA (M6 - M0)",
+  legend_df = d11_legend
 )
 cor_df_delta_time  <- corr_res_delta_time$cor_df
 (fig_cor_delta_time <- corr_res_delta_time$fig)
@@ -388,28 +404,28 @@ cor_df_delta_time  <- corr_res_delta_time$cor_df
 # **********************************************************************
 # figures
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_all.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_all.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_all_time)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_m0.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_m0.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_m0_time)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_m6.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_m6.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_m6_time)
 dev.off()
 
 tiff(
-  filename = file.path("output/figures/final", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_delta_m6_m0.tiff")),
+  filename = file.path("output/figures", paste0(format(Sys.Date(), "%y%m%d"), "_corr_kendall_time_delta_m6_m0.tiff")),
   compression = "lzw", res = "150", width = 1200, height = 1200
 )
 print(fig_cor_delta_time)

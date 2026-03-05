@@ -973,16 +973,15 @@ make_corr_heatmap_kendall <- function(
     d_join,
     x_cols,
     y_cols,
-    title_suffix = "ALL",
-    legend_df = NULL
+    title_suffix = "ALL"
 ) {
   X <- d_join |>
-    dplyr::select(dplyr::all_of(x_cols)) |>
+    dplyr::select(all_of(x_cols)) |>
     as.matrix() |>
     drop_const_cols()
   
   Y <- d_join |>
-    dplyr::select(dplyr::all_of(y_cols)) |>
+    dplyr::select(all_of(y_cols)) |>
     as.matrix() |>
     drop_const_cols()
   
@@ -1016,34 +1015,6 @@ make_corr_heatmap_kendall <- function(
       )
     )
   
-  # --- ORDER clinical variables by d11_legend$order (1..5), NAs last
-  if (!is.null(legend_df)) {
-    leg <- legend_df |>
-      dplyr::transmute(
-        clinical_var = names_new,
-        ord = order
-      ) |>
-      dplyr::distinct()
-    
-    # keep only vars present in the plot
-    leg_present <- leg |>
-      dplyr::filter(clinical_var %in% unique(cor_test_df$clinical_var))
-    
-    # define order: ord 1..5 first, then ord NA, and within each group by name
-    lev <- leg_present |>
-      dplyr::mutate(ord2 = dplyr::if_else(is.na(ord), Inf, ord)) |>
-      dplyr::arrange(ord2, clinical_var) |>
-      dplyr::pull(clinical_var) |>
-      unique()
-    
-    # append any clinical vars missing from legend at the end
-    lev_missing <- setdiff(unique(cor_test_df$clinical_var), lev)
-    lev <- c(lev, lev_missing)
-    
-    cor_test_df <- cor_test_df |>
-      dplyr::mutate(clinical_var = factor(clinical_var, levels = lev))
-  }
-  
   fig <- ggplot2::ggplot(cor_test_df, ggplot2::aes(activity_var, clinical_var, fill = correlation)) +
     ggplot2::geom_tile() +
     ggplot2::geom_text(ggplot2::aes(label = signif), color = "black", size = 3) +
@@ -1059,9 +1030,13 @@ make_corr_heatmap_kendall <- function(
       subtitle = "* p < 0.05, ** p < 0.01, *** p < 0.001 (raw p-values)"
     )
   
-  list(X = X, Y = Y, cor_df = cor_test_df, fig = fig)
+  list(
+    X = X,
+    Y = Y,
+    cor_df = cor_test_df,
+    fig = fig
+  )
 }
-
 
 # bout stacked chart
 # 1) doplnit rest sloupce (na úrovni pacienta)

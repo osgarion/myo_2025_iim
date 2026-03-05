@@ -1,6 +1,31 @@
 # **********************************************************************
 # 1. společná příprava dat (nové bout proměnné + jen kompletní M0/M6) ----
 # **********************************************************************
+# nově upravná tabulka čas
+d14_join <- d10_aktivita |>
+  transmute(
+    immet_id   = as.character(sample),
+    exam_order = tolower(as.character(exam)),
+    across(where(is.numeric), identity)
+  ) |>
+  inner_join(
+    d10_cas_b |>
+      transmute(
+        immet_id   = as.character(sample),
+        exam_order = tolower(as.character(exam)),
+        across(where(is.numeric), identity)
+      ),
+    by = c("immet_id", "exam_order"),
+    suffix = c("_activ", "_time")
+  ) |>
+  inner_join(
+    d11_clinics_imp |>
+      mutate(exam_order = tolower(as.character(exam_order))) |>
+      mutate(immet_id = as.character(immet_id)),
+    by = c("immet_id", "exam_order")
+  ) |>
+  filter(exam_order %in% c("m0", "m6")) |>
+  distinct()
 
 d14_bouts <- d14_join |>
   dplyr::mutate(
@@ -40,12 +65,12 @@ bout_vars <- c(
 # **********************************************************************
 # 2. Tabulka: disease_subtype x exam_order (mean + sd) ----
 # **********************************************************************
-
-tab_bout_subtype <- d14_bouts |>
+# tab_bout_subtype <- d14_bouts |> # previous version
+tab_bout_subtype <- d14_join |>
   dplyr::group_by(disease_subtype, exam_order) |>
   dplyr::summarise(
     dplyr::across(
-      dplyr::all_of(bout_vars),
+      dplyr::ends_with("time_min"), 
       list(
         mean = ~ mean(.x, na.rm = TRUE),
         sd   = ~ sd(.x, na.rm = TRUE)
@@ -58,11 +83,12 @@ tab_bout_subtype <- d14_bouts |>
 # **********************************************************************
 # 3. Tabulka: response_m0_m6 x exam_order (mean + sd) ----
 # **********************************************************************
-tab_bout_response <- d14_bouts |>
+# tab_bout_response <- d14_join |> # previous version
+tab_bout_response <- d14_join |>
   dplyr::group_by(response_m0_m6, exam_order) |>
   dplyr::summarise(
     dplyr::across(
-      dplyr::all_of(bout_vars),
+      dplyr::ends_with("time_min"), 
       list(
         mean = ~ mean(.x, na.rm = TRUE),
         sd   = ~ sd(.x, na.rm = TRUE)
@@ -75,12 +101,12 @@ tab_bout_response <- d14_bouts |>
 # **********************************************************************
 # 4. Tabulka: pouze exam_order (mean + sd) ----
 # **********************************************************************
-
-tab_bout_patient <- d14_bouts |>
+# tab_bout_patient <- d14_bouts |># previous version
+tab_bout_patient <- d14_join |>
   dplyr::group_by(exam_order) |>
   dplyr::summarise(
     dplyr::across(
-      dplyr::all_of(bout_vars),
+      dplyr::ends_with("time_min"), 
       list(
         mean = ~ mean(.x, na.rm = TRUE),
         sd   = ~ sd(.x, na.rm = TRUE)

@@ -285,9 +285,9 @@ d10_aktivita <- rio::import(file_ggir_01,
          sample = as.factor(sample)) |> 
   left_join(d10_ostatni |> select(-r2_enmo))
 
-d11_legend <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Geneactiv/pro závěrečnou zprávu AZV/Klinicka_tabulka_13012026.xlsx",
+d11_legend <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Geneactiv/Klinicka_tabulka_13012026.xlsx",
                           which="legend")
-d11_clinics <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Geneactiv/pro závěrečnou zprávu AZV/Klinicka_tabulka_13012026.xlsx",
+d11_clinics <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Geneactiv/Klinicka_tabulka_13012026.xlsx",
                             which="data") |> 
   rename(any_of(setNames(d11_legend$names_orig, d11_legend$names_new))) |> 
   select(-contains("birth"), -contains("name"), -contains("date"), -notes,
@@ -321,7 +321,7 @@ d11_clinics <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/
   )
 
 # mice
-future::plan(future::multisession, workers = max(1L, future::availableCores() - 1L))
+future::plan("sequential")
 future::nbrOfWorkers()
 
 d11_clinics_imp <- d11_clinics |> 
@@ -332,7 +332,7 @@ d11_clinics_imp <- d11_clinics |>
   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
                    n.core = max(1L, future::availableCores() - 1L),
                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
-                   future.plan = "multisession",
+                   future.plan = "sequential",
                    ridge = 1e-02,
                    remove.collinear = TRUE,
                    remove.constant = TRUE
@@ -807,7 +807,7 @@ d13_join <- d10_cas_b |>
 
 # **********************************************************************
 ## MOFA ----
-
+# **********************************************************************
 d12_mofa <- d12_join |>
   mutate(
     sample  = paste0(immet_id, "_", exam_order),
@@ -822,120 +822,80 @@ d13_mofa <- d13_join |>
   ) |>
   distinct(sample, .keep_all = TRUE)
 
-# **********************************************************************
-## Ceiling-Effect Replacement Analysis ----
-# **********************************************************************
-folder_path_2 <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Data/Raw/Geneactiv/20260302_GGIR_klinika/"
-
-d18_ggir_legend <-import(paste0(folder_path_2, "260302_data_geneactive_clinics.xlsx"),
-                         which = "legend") 
-d18_ggir_data <- import(paste0(folder_path_2, "260302_data_geneactive_clinics.xlsx"),
-                        which = "sheet1") |>
-  rename(any_of(setNames(d18_ggir_legend$names_orig,
-                         d18_ggir_legend$names_new))) |>
-  mutate(
-    exam = factor(
-      exam,
-      levels = unique(exam)[
-        order(as.numeric(sub("^M", "", unique(exam))))
-      ]
-    )
-  ) |>
-  droplevels()
-
-d18_mvpa_legend <-import(paste0(folder_path_2, "260302_data_geneactive_clinics.xlsx"),
-                         which = "legenda_prahy")  
-d18_mvpa_data <-import(paste0(folder_path_2, "260302_data_geneactive_clinics.xlsx"),
-                       which = "mvpa_prahy") |> 
-  rename(any_of(setNames(d18_mvpa_legend$names_orig, 
-                         d18_mvpa_legend$names_new))) |> 
-  mutate(
-    exam = factor(
-      exam,
-      levels = unique(exam)[
-        order(as.numeric(sub("^M", "", unique(exam))))
-      ]
-    )
-  ) |>
-  droplevels()
-
-
-
-# **********************************************************************
 ## PCA, heatmap ----
 # *******************************************************
 # m0
-# data_m0 <- d03 |> 
-#   filter(poradie_vysetrenia == "M0") |> 
-#   select(where(is.numeric)) |> 
-#   select(where(~mean(is.na(.x)) < 0.8)) |> 
-#   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-#                    n.core = max(1L, future::availableCores() - 1L),
-#                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
-#                    future.plan = "sequential",
-#                    ridge = 1e-02,
-#                    remove.collinear = TRUE,
-#                    remove.constant = TRUE
-#   ) |> 
-#   mice::complete() |> 
-#   select(where(~ !anyNA(.x)))
-# group_m0 <- d03 |> 
-#   filter(poradie_vysetrenia == "M0") |> 
-#   pull(podtyp_nemoci_zjednoduseny)
-# # m3
-# data_m3 <- d03 |> 
-#   filter(poradie_vysetrenia == "M3") |> 
-#   select(where(is.numeric)) |> 
-#   select(where(~mean(is.na(.x)) < 0.8)) |> 
-#   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-#                    n.core = max(1L, future::availableCores() - 1L),
-#                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
-#                    future.plan = "sequential",
-#                    ridge = 1e-02,
-#                    remove.collinear = TRUE,
-#                    remove.constant = TRUE
-#   ) |> 
-#   mice::complete() |> 
-#   select(where(~ !anyNA(.x)))
-# group_m3 <- d03 |> 
-#   filter(poradie_vysetrenia == "M3") |> 
-#   pull(podtyp_nemoci_zjednoduseny)
-# # m6
-# data_m6 <- d03 |> 
-#   filter(poradie_vysetrenia == "M6") |> 
-#   select(where(is.numeric)) |> 
-#   select(where(~mean(is.na(.x)) < 0.8)) |> 
-#   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-#                    n.core = max(1L, future::availableCores() - 1L),
-#                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
-#                    future.plan = "sequential",
-#                    ridge = 1e-02,
-#                    remove.collinear = TRUE,
-#                    remove.constant = TRUE
-#   ) |> 
-#   mice::complete() |> 
-#   select(where(~ !anyNA(.x)))
-# group_m6 <- d03 |> 
-#   filter(poradie_vysetrenia == "M6") |> 
-#   pull(podtyp_nemoci_zjednoduseny)
-# # m18
-# data_m18 <- d03 |> 
-#   filter(poradie_vysetrenia == "M18") |> 
-#   select(where(is.numeric)) |> 
-#   select(where(~mean(is.na(.x)) < 0.8)) |> 
-#   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-#                    n.core = max(1L, future::availableCores() - 1L),
-#                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
-#                    future.plan = "sequential",
-#                    ridge = 1e-02,
-#                    remove.collinear = TRUE,
-#                    remove.constant = TRUE
-#   ) |> 
-#   mice::complete() |> 
-#   select(where(~ !anyNA(.x)))
-# group_m18 <- d03 |> 
-#   filter(poradie_vysetrenia == "M18") |> 
-#   pull(podtyp_nemoci_zjednoduseny)
+data_m0 <- d03 |> 
+  filter(poradie_vysetrenia == "M0") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::futuremice(m = 40, maxit = 5, method = "pmm", 
+                   n.core = max(1L, future::availableCores() - 1L),
+                   parallelseed = 123,            # seed pro paralelní běh (doporučeno)
+                   future.plan = "sequential",
+                   ridge = 1e-02,
+                   remove.collinear = TRUE,
+                   remove.constant = TRUE
+  ) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m0 <- d03 |> 
+  filter(poradie_vysetrenia == "M0") |> 
+  pull(podtyp_nemoci_zjednoduseny)
+# m3
+data_m3 <- d03 |> 
+  filter(poradie_vysetrenia == "M3") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::futuremice(m = 40, maxit = 5, method = "pmm", 
+                   n.core = max(1L, future::availableCores() - 1L),
+                   parallelseed = 123,            # seed pro paralelní běh (doporučeno)
+                   future.plan = "sequential",
+                   ridge = 1e-02,
+                   remove.collinear = TRUE,
+                   remove.constant = TRUE
+  ) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m3 <- d03 |> 
+  filter(poradie_vysetrenia == "M3") |> 
+  pull(podtyp_nemoci_zjednoduseny)
+# m6
+data_m6 <- d03 |> 
+  filter(poradie_vysetrenia == "M6") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::futuremice(m = 40, maxit = 5, method = "pmm", 
+                   n.core = max(1L, future::availableCores() - 1L),
+                   parallelseed = 123,            # seed pro paralelní běh (doporučeno)
+                   future.plan = "sequential",
+                   ridge = 1e-02,
+                   remove.collinear = TRUE,
+                   remove.constant = TRUE
+  ) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m6 <- d03 |> 
+  filter(poradie_vysetrenia == "M6") |> 
+  pull(podtyp_nemoci_zjednoduseny)
+# m18
+data_m18 <- d03 |> 
+  filter(poradie_vysetrenia == "M18") |> 
+  select(where(is.numeric)) |> 
+  select(where(~mean(is.na(.x)) < 0.8)) |> 
+  mice::futuremice(m = 40, maxit = 5, method = "pmm", 
+                   n.core = max(1L, future::availableCores() - 1L),
+                   parallelseed = 123,            # seed pro paralelní běh (doporučeno)
+                   future.plan = "sequential",
+                   ridge = 1e-02,
+                   remove.collinear = TRUE,
+                   remove.constant = TRUE
+  ) |> 
+  mice::complete() |> 
+  select(where(~ !anyNA(.x)))
+group_m18 <- d03 |> 
+  filter(poradie_vysetrenia == "M18") |> 
+  pull(podtyp_nemoci_zjednoduseny)
 
 
 
