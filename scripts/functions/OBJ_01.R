@@ -48,7 +48,17 @@ sel_time_01 <- c("p9931_enmo", "m5_enmo", "ig_intercept_enmo", "ig_gradient_enmo
 sel_activ_01 <- c("t100_time_min", "moderate", "light", "inactivity",
                   "t40_time_min", "t20_time_min", "t30_time_min")
 sel_activ_01b <- c("mvpa_t100_time_min", "moderate", "light", "inactivity",
-                  "t40_time_min", "t20_time_min", "t30_time_min")
+                   "t40_time_min", "t20_time_min", "t30_time_min")
+
+# Safe worker cap for heavy parallel sections (important for background jobs).
+safe_future_workers_01 <- as.integer(getOption(
+  "myo_ncores",
+  max(1L, min(4L, future::availableCores() - 1L))
+))
+if (!is.finite(safe_future_workers_01) || is.na(safe_future_workers_01)) {
+  safe_future_workers_01 <- max(1L, min(4L, future::availableCores() - 1L))
+}
+safe_future_workers_01 <- max(1L, safe_future_workers_01)
 sel_clinics_02 <- c("mmt8_total", "fi2", "muscle_activity", "pulmonary_activity", 
                     "borg10", "haq", "physician_vas",  "phase_angle", "ast", "b_m_rate",
                     "creatinine", "gc_dose_mg_day")
@@ -108,7 +118,7 @@ d01_myokiny <- import(path_myo_01) |>
 d01_myokiny_2 <- import("F:/Analysis/Vernerová Lucia/myo_2025_iim/data/processed/Myokiny sérum_pro stat_processed.xlsx") |> 
   mutate(immet_id = str_remove_all(immet_id, "_")) |> 
   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-                   n.core = max(1L, future::availableCores() - 1L),
+                   n.core = safe_future_workers_01,
                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
                    future.plan = "sequential",
                    ridge = 1e-02,
@@ -321,7 +331,7 @@ d11_clinics <- rio::import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/
   )
 
 # mice
-future::plan(future::multisession, workers = max(1L, future::availableCores() - 1L))
+future::plan(future::multisession, workers = safe_future_workers_01)
 future::nbrOfWorkers()
 
 d11_clinics_imp <- d11_clinics |> 
@@ -330,7 +340,7 @@ d11_clinics_imp <- d11_clinics |>
     where(~ mean(is.na(.x)) <= 0.20)
   ) |> 
   mice::futuremice(m = 40, maxit = 5, method = "pmm", 
-                   n.core = max(1L, future::availableCores() - 1L),
+                   n.core = safe_future_workers_01,
                    parallelseed = 123,            # seed pro paralelní běh (doporučeno)
                    future.plan = "multisession",
                    ridge = 1e-02,

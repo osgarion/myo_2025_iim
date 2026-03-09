@@ -19,7 +19,7 @@ d14_join <- d10_aktivita |>
     across(where(is.numeric), identity)
   ) |>
   inner_join(
-    d10_cas |>
+    d10_cas_b |>
       transmute(
         immet_id   = as.character(sample),
         exam_order = tolower(as.character(exam)),
@@ -746,8 +746,8 @@ export(list(model_sum = res_ord_01_tab_summary,
 # **********************************************************************
 
 
-fig_sel_01 <- c("enmo_full_recording_mean", "inactivity", "light", 
-                "moderate", "t400_time_min")
+fig_sel_01 <- c("acc_day_spt_wei","inactivity_a", "inactivity_b","inactivity_c", "light", 
+                "moderate", "vigorous")
 
 fig_sel_02 <- c("ig_gradient_enmo", "ig_intercept_enmo", "m5_enmo")
 
@@ -792,6 +792,9 @@ fig_line_m0m6_respcol_make_var_column <- function(
     response_col = "response_m0_m6",
     exam_col = "exam_order",
     value_col = "var_value",
+    trend_fun = median,          # <- change to mean if you want
+    trend_size = 1.3,
+    trend_point_size = 2.6,
     color_values = c(
       "No Improvement" = "blue",
       "Minimal"        = "red",
@@ -799,6 +802,14 @@ fig_line_m0m6_respcol_make_var_column <- function(
       "Major"          = "#9900FF"
     )
 ) {
+  # summary per response (so it appears inside each facet row)
+  df_trend <- df_var |>
+    dplyr::group_by(.data[[response_col]], .data[[exam_col]]) |>
+    dplyr::summarise(
+      trend_y = trend_fun(.data[[value_col]], na.rm = TRUE),
+      .groups = "drop"
+    )
+  
   ggplot(df_var, aes(
     x = .data[[exam_col]],
     y = .data[[value_col]],
@@ -811,7 +822,25 @@ fig_line_m0m6_respcol_make_var_column <- function(
       position = position_jitter(width = 0.08, height = 0),
       size = 2, alpha = 0.5
     ) +
-    scale_color_manual(values = color_values) +
+    
+    # ---- central black trend (drawn on top) ----
+  geom_line(
+    data = df_trend,
+    aes(x = .data[[exam_col]], y = trend_y, group = 1),
+    inherit.aes = FALSE,
+    color = "black",
+    linewidth = trend_size
+  ) +
+    geom_point(
+      data = df_trend,
+      aes(x = .data[[exam_col]], y = trend_y),
+      inherit.aes = FALSE,
+      color = "black",
+      size = trend_point_size
+    ) +
+    # -------------------------------------------
+  
+  scale_color_manual(values = color_values) +
     labs(title = var_label) +
     facet_grid(rows = vars(.data[[response_col]]), scales = "fixed") +
     sjPlot::theme_sjplot2() +
@@ -873,13 +902,16 @@ fig_line_m0m6_respcol_patchwork_4cols <- function(
 
 # ---- použít:
 fig_line_m0m6_respcol_out <- fig_line_m0m6_respcol_patchwork_4cols(
-  data = d14_join,
+  data = d14_join |> 
+    dplyr::group_by(immet_id) |>
+    dplyr::filter(dplyr::n_distinct(exam_order) == 2) |>
+    dplyr::ungroup(),
   vars_sel = fig_sel_01
 )
 
 fig_line_01 <- fig_line_m0m6_respcol_out$fig_line_m0m6_respcol_patch
 tiff(
-  filename = file.path("output/figures/final",
+  filename = file.path("output/figures",
                        paste0(format(Sys.Date(), "%y%m%d"),
                        "_", 
                        "slope_line_chart_01.tiff")),

@@ -1822,6 +1822,10 @@ Z hlediska myozitid je nejcennější shoda v tom, že **proměnné aktivity a k
 <summary>Platform</summary>
 
 ```{r session_info_1}
+if (!"tidyverse" %in% .packages()) library(tidyverse)
+if (!"knitr" %in% .packages()) library(knitr)
+if (!"kableExtra" %in% .packages()) library(kableExtra)
+
 df_session_platform <- devtools::session_info()$platform %>%
   unlist(.) %>%
   as.data.frame(.) %>%

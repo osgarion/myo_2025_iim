@@ -3,13 +3,34 @@
 # **********************************************************************
 ## libraries ----
 # **********************************************************************
-# required
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, purrr, conflicted, renv)
-# Functions and libraries uploading
-list.files("scripts/functions/", pattern = "*.*", full.names = TRUE) |>
-  map(~ source(.))
-renv::status()
+# Functions and objects for ceiling/floor analysis only
+source("scripts/functions/FUN_ceil_flo_01.R")
+source("scripts/functions/OBJ_ceil_flo_01.R")
+if (isTRUE(getOption("myo_run_renv_status", FALSE))) {
+  renv::status()
+}
+
+# Default analysis configuration.
+# NOTE: wrappers/background-job scripts can override these objects before sourcing this file.
+if (!exists("sel_dep_var_ceil_01", inherits = FALSE)) {
+  sel_dep_var_ceil_01 <- c("mmt8", "mmt10", "fi2", "fi3", "haq")
+}
+if (!exists("sel_indep_var_ceil_01", inherits = FALSE)) {
+  sel_indep_var_ceil_01 <- c("ig_gradient_enmo")
+}
+if (!exists("output_root_ceil_01", inherits = FALSE)) {
+  output_root_ceil_01 <- file.path("output", "ceil_flo")
+}
+if (!exists("run_repro_backup_block_ceil_01", inherits = FALSE)) {
+  run_repro_backup_block_ceil_01 <- FALSE
+}
+output_fig_dir_ceil_01 <- file.path(output_root_ceil_01, "figures")
+output_tab_dir_ceil_01 <- file.path(output_root_ceil_01, "tables")
+
+walk(
+  c(output_root_ceil_01, output_fig_dir_ceil_01, output_tab_dir_ceil_01),
+  ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
+)
 
 # **********************************************************************
 ## Data ----
@@ -32,6 +53,17 @@ d18_ggir_data_long <- d18_ggir_data |>
     )
   )
 
+# Canonical exam ordering used across all multi-figure facets.
+exam_levels_ref_01 <- c("M0", "M3", "M6", "M18", "M30", "M48")
+
+# Normalize exam labels to canonical "M<number>" factor ordering.
+normalize_exam_factor_01 <- function(x, levels_ref = exam_levels_ref_01) {
+  x_chr <- stringr::str_to_upper(stringr::str_trim(as.character(x)))
+  x_num <- suppressWarnings(readr::parse_number(x_chr))
+  x_lab <- if_else(is.na(x_num), x_chr, paste0("M", as.integer(x_num)))
+  factor(x_lab, levels = levels_ref)
+}
+
 # **********************************************************************
 # 2. Environment reproducibility ----
 # **********************************************************************
@@ -41,35 +73,23 @@ d18_ggir_data_long <- d18_ggir_data |>
 # renv::snapshot()    # after changing deps
 # renv::restore()     # on a new machine
 
-# Back-up
-back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify using 'path_dest'
-back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
-back_up("scripts/Script_myo_2025_iim_02_ggir.R") # the the destination subdirectory specify using 'path_dest'
+if (isTRUE(run_repro_backup_block_ceil_01)) {
+  # Back-up
+  back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify using 'path_dest'
+  back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
+  back_up("scripts/Script_myo_2025_iim_02_ggir.R") # the the destination subdirectory specify using 'path_dest'
 
-# Save to .RData
-save(xx1,
-  file = "reports/markD_01.RData"
-)
-save.image("reports/markD_01.RData")
-save.image("data/260123_backup.RData")
-# Save the tables into data/tables.RData by listing them individually
-cgwtools::resave(xx2, xx3, file = "reports/markD_01.RData") # resave a list of tables that I'll use in the .Rmd file.
-# Save the tables into data/tables.RData using "patterns"
-cgwtools::resave(list = ls(pattern = "tbl"), file = "reports/markD_01.RData")
-
-# ceiling effect
-sel_dep_var_ceil_01 <- c("mmt8", "mmt10", "fi2", "fi3", "haq")
-sel_indep_var_ceil_01 <- c("ig_gradient_enmo")
-
-output_root_ceil_01 <- file.path("output", "ceil_flo")
-output_fig_dir_ceil_01 <- file.path(output_root_ceil_01, "figures")
-output_tab_dir_ceil_01 <- file.path(output_root_ceil_01, "tables")
-
-walk(
-  c(output_root_ceil_01, output_fig_dir_ceil_01, output_tab_dir_ceil_01),
-  ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
-)
-
+  # Save to .RData
+  save(xx1,
+    file = "reports/markD_01.RData"
+  )
+  save.image("reports/markD_01.RData")
+  save.image("data/260123_backup.RData")
+  # Save the tables into data/tables.RData by listing them individually
+  cgwtools::resave(xx2, xx3, file = "reports/markD_01.RData") # resave a list of tables that I'll use in the .Rmd file.
+  # Save the tables into data/tables.RData using "patterns"
+  cgwtools::resave(list = ls(pattern = "tbl"), file = "reports/markD_01.RData")
+}
 
 # *******************************************************
 # 3. EDA ----
@@ -124,23 +144,44 @@ split(
     df_num <- df_exam |>
       select(-exam) |>
       select(where(is.numeric)) |>
-      select(where(~ sd(.x, na.rm = TRUE) > 0))
+      select(where(~ {
+        s <- suppressWarnings(stats::sd(.x, na.rm = TRUE))
+        is.finite(s) && (s > 0)
+      }))
 
     if (ncol(df_num) > 1) {
-      M <- cor(
-        df_num,
-        method = "spearman",
-        use = "pairwise.complete.obs"
+      M <- suppressWarnings(
+        cor(
+          df_num,
+          method = "spearman",
+          use = "pairwise.complete.obs"
+        )
       )
 
-      corrplot(
-        M,
-        type = "upper",
-        order = "hclust",
-        tl.col = "black",
-        tl.srt = 45,
-        main = paste("Exam:", unique(df_exam$exam))
-      )
+      # Pairwise-complete correlations can produce NA/Inf blocks.
+      # Keep only variables with fully finite correlations to avoid hclust failure.
+      if (is.matrix(M) && ncol(M) > 1) {
+        diag(M) <- 1
+        keep_cols <- apply(M, 2, function(v) all(is.finite(v)))
+        M <- M[keep_cols, keep_cols, drop = FALSE]
+      }
+
+      if (is.matrix(M) && ncol(M) > 1) {
+        corrplot(
+          M,
+          type = "upper",
+          order = "hclust",
+          tl.col = "black",
+          tl.srt = 45,
+          main = paste("Exam:", unique(df_exam$exam))
+        )
+      } else {
+        message(
+          "Skipping corrplot for exam ",
+          unique(df_exam$exam),
+          " (insufficient finite correlation matrix)."
+        )
+      }
     }
   })
 
@@ -235,6 +276,7 @@ sjPlot::theme_sjplot2() +
 ## Kendall correlation EDA: ig_gradient vs clinical outcomes ----
 # **********************************************************************
 x_col_eda_ceil_01 <- sel_indep_var_ceil_01[[1]]
+x_lab_eda_ceil_01 <- stringr::str_remove(x_col_eda_ceil_01, "_enmo$")
 
 # Safe Kendall test returning n, tau and p-value for one x/y vector pair.
 kendall_test_safe_eda_01 <- function(x, y) {
@@ -260,7 +302,7 @@ kendall_test_safe_eda_01 <- function(x, y) {
 d18_eda_corr_long_ceil_01 <- d18_ggir_data |>
   select(any_of(c("exam", x_col_eda_ceil_01, sel_dep_var_ceil_01))) |>
   transmute(
-    exam = as.character(exam),
+    exam = normalize_exam_factor_01(exam),
     ig_gradient = as.numeric(.data[[x_col_eda_ceil_01]]),
     across(any_of(sel_dep_var_ceil_01), as.numeric)
   ) |>
@@ -279,18 +321,7 @@ d18_eda_corr_long_ceil_01 <- d18_ggir_data |>
   ) |>
   filter(!is.na(exam), !is.na(ig_gradient), !is.na(y))
 
-# Order exam by numeric month extracted from label (e.g., M0, M6, M18).
-exam_levels_eda_ceil_01 <- d18_eda_corr_long_ceil_01 |>
-  distinct(exam) |>
-  mutate(
-    exam_month = readr::parse_number(exam),
-    exam_month = if_else(is.na(exam_month), Inf, exam_month)
-  ) |>
-  arrange(exam_month, exam) |>
-  pull(exam)
-
-d18_eda_corr_long_ceil_01 <- d18_eda_corr_long_ceil_01 |>
-  mutate(exam = factor(exam, levels = exam_levels_eda_ceil_01))
+exam_levels_eda_ceil_01 <- exam_levels_ref_01
 
 # Kendall summary for all values.
 res_eda_kendall_all_ceil_01 <- d18_eda_corr_long_ceil_01 |>
@@ -349,7 +380,12 @@ plot_kendall_exam_multi_ceil_01 <- function(outcome_i) {
 
   ggplot(dat_plot, aes(x = ig_gradient, y = y)) +
     geom_point(alpha = 0.45, size = 3.0, color = "grey50") +
-    geom_smooth(method = "lm", se = FALSE, linewidth = 1.2, color = "grey30") +
+    geom_smooth(
+      aes(color = "Trend: all values", linetype = "Trend: all values"),
+      method = "lm",
+      se = FALSE,
+      linewidth = 1.2
+    ) +
     geom_point(
       data = dat_no_cei_flo,
       aes(x = ig_gradient, y = y),
@@ -360,12 +396,16 @@ plot_kendall_exam_multi_ceil_01 <- function(outcome_i) {
     ) +
     geom_smooth(
       data = dat_no_cei_flo,
-      aes(x = ig_gradient, y = y),
+      aes(
+        x = ig_gradient,
+        y = y,
+        color = "Trend: without ceiling/floor",
+        linetype = "Trend: without ceiling/floor"
+      ),
       inherit.aes = FALSE,
       method = "lm",
       se = FALSE,
-      linewidth = 1.2,
-      color = "#d95f0e"
+      linewidth = 1.2
     ) +
     geom_text(
       data = lab_plot,
@@ -373,25 +413,42 @@ plot_kendall_exam_multi_ceil_01 <- function(outcome_i) {
       inherit.aes = FALSE,
       hjust = -0.02,
       vjust = 1.15,
-      size = 8.2,
+      size = 3.6,
       lineheight = 1.0,
       fontface = "bold"
     ) +
     facet_wrap(~exam, scales = "free_y", ncol = 2) +
     coord_cartesian(clip = "off") +
     labs(
-      title = paste0("Kendall correlation: ig_gradient vs ", outcome_i),
+      title = paste0("Kendall correlation: ", x_lab_eda_ceil_01, " vs ", outcome_i),
       subtitle = "Grey = all values | Blue/Orange = without ceiling/floor",
-      x = "ig_gradient",
+      x = x_lab_eda_ceil_01,
       y = outcome_i
     ) +
-    theme_minimal(base_size = 34) +
+    scale_color_manual(
+      values = c(
+        "Trend: all values" = "grey30",
+        "Trend: without ceiling/floor" = "#d95f0e"
+      ),
+      name = "Trend"
+    ) +
+    scale_linetype_manual(
+      values = c(
+        "Trend: all values" = "solid",
+        "Trend: without ceiling/floor" = "solid"
+      ),
+      name = "Trend"
+    ) +
+    theme_minimal(base_size = 16) +
     theme(
-      strip.text = element_text(face = "bold", size = 30),
-      plot.title = element_text(face = "bold", size = 38),
-      plot.subtitle = element_text(face = "bold", size = 28),
-      axis.title = element_text(size = 30, face = "bold"),
-      axis.text = element_text(size = 24, face = "bold")
+      strip.text = element_text(face = "bold", size = 16),
+      plot.title = element_text(face = "bold", size = 22),
+      plot.subtitle = element_text(face = "bold", size = 15),
+      axis.title = element_text(size = 16, face = "bold"),
+      axis.text = element_text(size = 13, face = "bold"),
+      legend.position = "bottom",
+      legend.title = element_text(size = 12, face = "bold"),
+      legend.text = element_text(size = 11, face = "bold")
     )
 }
 
@@ -474,8 +531,8 @@ if (!is.na(phvas_col_eda_ceil_01)) {
   d18_eda_phvas_dual_long_01 <- d18_ggir_data |>
     select(any_of(c("exam", phvas_col_eda_ceil_01, x_col_eda_ceil_01, sel_dep_var_ceil_01))) |>
     transmute(
-      exam = as.character(exam),
-      exam_order_factor = factor(exam, levels = exam_levels_eda_ceil_01),
+      exam = normalize_exam_factor_01(exam),
+      exam_order_factor = normalize_exam_factor_01(exam),
       ph_vas = as.numeric(.data[[phvas_col_eda_ceil_01]]),
       ig_gradient = as.numeric(.data[[x_col_eda_ceil_01]]),
       across(any_of(sel_dep_var_ceil_01), as.numeric)
@@ -514,36 +571,38 @@ if (!is.na(phvas_col_eda_ceil_01)) {
         ig_scaled = ((ig_gradient - g_min) / g_rng) * y_rng + y_min
       )
 
+    pred_lab <- x_lab_eda_ceil_01
+
     ggplot(dat_plot, aes(x = ph_vas)) +
       geom_point(aes(y = y_clin, color = "Clinical"), alpha = 0.7, size = 2.4) +
       geom_smooth(aes(y = y_clin, color = "Clinical"), method = "lm", se = FALSE, linewidth = 1.1) +
-      geom_point(aes(y = ig_scaled, color = "ig_gradient"), alpha = 0.7, size = 2.4) +
-      geom_smooth(aes(y = ig_scaled, color = "ig_gradient"), method = "lm", se = FALSE, linewidth = 1.1) +
+      geom_point(aes(y = ig_scaled, color = .env$pred_lab), alpha = 0.7, size = 2.4) +
+      geom_smooth(aes(y = ig_scaled, color = .env$pred_lab), method = "lm", se = FALSE, linewidth = 1.1) +
       facet_wrap(~exam_order_factor, ncol = 2) +
       scale_color_manual(
-        values = c("Clinical" = "#2b8cbe", "ig_gradient" = "#d95f0e"),
+        values = c("Clinical" = "#2b8cbe", setNames("#d95f0e", pred_lab)),
         name = NULL
       ) +
       scale_y_continuous(
         name = outcome_i,
         sec.axis = sec_axis(
           ~ ((. - y_min) / y_rng) * g_rng + g_min,
-          name = "ig_gradient"
+          name = pred_lab
         )
       ) +
       labs(
-        title = paste0("PhVAS vs ", outcome_i, " + ig_gradient"),
+        title = paste0("PhVAS vs ", outcome_i, " + ", pred_lab),
         subtitle = "Facet: exam_order_factor",
         x = "ph_vas"
       ) +
-      theme_bw(base_size = 28) +
+      theme_bw(base_size = 16) +
       theme(
-        strip.text = element_text(face = "bold", size = 24),
-        plot.title = element_text(face = "bold", size = 34),
-        plot.subtitle = element_text(face = "bold", size = 22),
-        axis.title = element_text(size = 26, face = "bold"),
-        axis.text = element_text(size = 20, face = "bold"),
-        legend.text = element_text(size = 20, face = "bold")
+        strip.text = element_text(face = "bold", size = 14),
+        plot.title = element_text(face = "bold", size = 20),
+        plot.subtitle = element_text(face = "bold", size = 14),
+        axis.title = element_text(size = 14, face = "bold"),
+        axis.text = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 12, face = "bold")
       )
   }
 
@@ -634,9 +693,9 @@ if (!is.na(phvas_col_eda_ceil_01)) {
     group_modify(~ calc_kendall_safe_01(.x$ph_vas, .x$ig_gradient)) |>
     ungroup() |>
     mutate(
-      pair = "phvas_vs_ig_gradient",
+      pair = paste0("phvas_vs_", x_lab_eda_ceil_01),
       x_var = "ph_vas",
-      y_var = "ig_gradient",
+      y_var = x_lab_eda_ceil_01,
       .before = 1
     )
 
@@ -719,10 +778,7 @@ if (is.na(id_col_eda_trend_01) || is.na(exam_col_eda_trend_01)) {
     ) |>
     filter(!is.na(ig_gradient), !is.na(y)) |>
     mutate(
-      exam_label = factor(
-        exam_label,
-        levels = unique(exam_label[order(exam_month)])
-      )
+      exam_label = factor(exam_label, levels = exam_levels_ref_01)
     )
 
   # Outcome-specific bounds for fixed Y1 axis (ceiling + 5; HAQ floor anchored at 0).
@@ -818,9 +874,9 @@ if (is.na(id_col_eda_trend_01) || is.na(exam_col_eda_trend_01)) {
 
     p_main <- ggplot(dat_med, aes(x = exam_month)) +
       geom_point(aes(y = y_median, color = "Clinical"), size = 3) +
-      geom_line(aes(y = y_median, color = "Clinical"), linewidth = 1) +
-      geom_point(aes(y = ig_scaled, color = "IG gradient"), shape = 1, size = 3, stroke = 1.2) +
-      geom_line(aes(y = ig_scaled, color = "IG gradient", linetype = "IG gradient"), linewidth = 1) +
+      geom_line(aes(y = y_median, color = "Clinical"), linewidth = 2.4) +
+      geom_point(aes(y = ig_scaled, color = x_lab_eda_ceil_01), shape = 1, size = 3, stroke = 1.2) +
+      geom_line(aes(y = ig_scaled, color = x_lab_eda_ceil_01, linetype = x_lab_eda_ceil_01), linewidth = 2.4) +
       scale_x_continuous(
         breaks = dat_med$exam_month,
         labels = paste0("M", dat_med$exam_month)
@@ -829,31 +885,31 @@ if (is.na(id_col_eda_trend_01) || is.na(exam_col_eda_trend_01)) {
         name = paste0("Median ", outcome_i),
         sec.axis = sec_axis(
           ~ (. - b) / a,
-          name = "Median ig_gradient"
+          name = paste0("Median ", x_lab_eda_ceil_01)
         )
       ) +
       scale_color_manual(
         name = "Measure",
-        values = c("Clinical" = "black", "IG gradient" = "darkred")
+        values = c("Clinical" = "black", setNames("darkred", x_lab_eda_ceil_01))
       ) +
       scale_linetype_manual(
         name = "Measure",
-        values = c("IG gradient" = "dashed")
+        values = setNames("dashed", x_lab_eda_ceil_01)
       ) +
       labs(
-        title = paste0("Boundary-patient trend (<=M30): ", outcome_i, " + ig_gradient"),
+        title = paste0("Boundary-patient trend (<=M30): ", outcome_i, " + ", x_lab_eda_ceil_01),
         subtitle = "Only patients with at least one ceiling/floor visit in the selected outcome",
         x = "Exam"
       ) +
       coord_cartesian(ylim = c(y1_low_plot, y1_high)) +
-      theme_bw(base_size = 72) +
+      theme_bw(base_size = 24) +
       theme(
-        plot.title = element_text(face = "bold", size = 84),
-        plot.subtitle = element_text(face = "bold", size = 60),
-        axis.title = element_text(face = "bold", size = 66),
-        axis.text = element_text(face = "bold", size = 54),
-        legend.title = element_text(face = "bold", size = 54),
-        legend.text = element_text(face = "bold", size = 48)
+        plot.title = element_text(face = "bold", size = 30),
+        plot.subtitle = element_text(face = "bold", size = 20),
+        axis.title = element_text(face = "bold", size = 22),
+        axis.text = element_text(face = "bold", size = 18),
+        legend.title = element_text(face = "bold", size = 18),
+        legend.text = element_text(face = "bold", size = 16)
       )
 
     tab_counts <- dat_i |>
@@ -883,13 +939,13 @@ if (is.na(id_col_eda_trend_01) || is.na(exam_col_eda_trend_01)) {
 
     p_table <- ggplot(tab_plot_df, aes(x = exam_label, y = row)) +
       geom_tile(fill = "white", color = "grey50", linewidth = 0.6) +
-      geom_text(aes(label = value), size = 16.2, fontface = "bold") +
+      geom_text(aes(label = value), size = 8.4, fontface = "bold") +
       labs(x = NULL, y = NULL) +
-      theme_minimal(base_size = 48) +
+      theme_minimal(base_size = 20) +
       theme(
         panel.grid = element_blank(),
         axis.text.x = element_blank(),
-        axis.text.y = element_text(face = "bold", size = 42),
+        axis.text.y = element_text(face = "bold", size = 20),
         axis.ticks = element_blank(),
         plot.margin = margin(t = 0, r = 20, b = 10, l = 20)
       )
@@ -1606,6 +1662,7 @@ exam_col_01 <- pick_first_col_01(
 )
 # Resolve ig_gradient predictor column.
 x_col_01 <- pick_first_col_01(d18_ggir_data, sel_indep_var_ceil_01)
+x_lab_01 <- stringr::str_remove(x_col_01, "_enmo$")
 # Resolve age-at-baseline covariate column (age_m0 preferred).
 age_m0_col_01 <- pick_first_col_01(
   d18_ggir_data,
@@ -1635,7 +1692,7 @@ d_convert_01 <- d18_ggir_data |>
     exam_order = if (!is.na(exam_col_01)) as.character(.data[[exam_col_01]]) else NA_character_,
     exam_order_std = stringr::str_to_upper(stringr::str_trim(exam_order)),
     exam_time_month = parse_exam_time_01(exam_order),
-    exam_order_factor = factor(exam_order, levels = unique(exam_order[order(exam_time_month)])),
+    exam_order_factor = normalize_exam_factor_01(exam_order),
     ig_gradient = as.numeric(.data[[x_col_01]]),
     ig_grad_pos = -ig_gradient,
     age_raw_cov = if (!is.na(age_m0_col_01)) as.numeric(.data[[age_m0_col_01]]) else NA_real_
@@ -2361,9 +2418,28 @@ d_disease_activity_01 <- d_convert_model_01 |>
 # Display labels for model comparison plots/tables.
 disease_model_labels_01 <- c(
   model_a = "Model 1: clin",
-  model_b = "Model 2: clin + ig_gradient",
-  model_c = "Model 3: ig_gradient"
+  model_b = paste0("Model 2: clin + ", x_lab_01),
+  model_c = paste0("Model 3: ", x_lab_01)
 )
+
+make_models_named_abc_01 <- function(fit_obj) {
+  out <- list(
+    fit_obj$model_a,
+    fit_obj$model_b,
+    fit_obj$model_c
+  )
+  names(out) <- unname(disease_model_labels_01[c("model_a", "model_b", "model_c")])
+  out
+}
+
+# Ensure all displayed model labels use the currently selected activity parameter.
+normalize_model_display_labels_01 <- function(x_chr) {
+  out <- as.character(x_chr)
+  out <- stringr::str_replace_all(out, fixed("Model 2: clin + ig_gradient"), disease_model_labels_01[["model_b"]])
+  out <- stringr::str_replace_all(out, fixed("Model 3: ig_gradient"), disease_model_labels_01[["model_c"]])
+  out <- stringr::str_replace_all(out, fixed("ig_gradient"), x_lab_01)
+  out
+}
 
 # Recode compare_performance auto-names (model1/model2/...) to custom labels.
 relabel_compare_performance_01 <- function(perf_obj, model_labels) {
@@ -2383,7 +2459,13 @@ relabel_compare_performance_01 <- function(perf_obj, model_labels) {
 
   new_vals <- old_vals
   new_vals[valid_idx] <- model_labels[idx[valid_idx]]
-  perf_obj[[nm_col]] <- new_vals
+  perf_obj[[nm_col]] <- normalize_model_display_labels_01(new_vals)
+
+  # Some plotting methods use additional character columns for labels.
+  chr_cols <- names(perf_obj)[vapply(perf_obj, is.character, logical(1))]
+  for (cc in chr_cols) {
+    perf_obj[[cc]] <- normalize_model_display_labels_01(perf_obj[[cc]])
+  }
 
   perf_obj
 }
@@ -2888,11 +2970,7 @@ res_disease_models_01 <- outcomes_01 |>
 
     fit_obj <- fit_disease_models_one_outcome_01(dat)
 
-    models_named <- list(
-      `Model 1: clin` = fit_obj$model_a,
-      `Model 2: clin + ig_gradient` = fit_obj$model_b,
-      `Model 3: ig_gradient` = fit_obj$model_c
-    )
+    models_named <- make_models_named_abc_01(fit_obj)
     models_named <- models_named[!map_lgl(models_named, is.null)]
 
     display_labels <- names(models_named)
@@ -2959,11 +3037,7 @@ build_disease_perf_plot_01 <- function(model_entry, outcome_nm) {
     return(NULL)
   }
 
-  models_named <- list(
-    `Model 1: clin` = model_entry$fit$model_a,
-    `Model 2: clin + ig_gradient` = model_entry$fit$model_b,
-    `Model 3: ig_gradient` = model_entry$fit$model_c
-  )
+  models_named <- make_models_named_abc_01(model_entry$fit)
   models_named <- models_named[!map_lgl(models_named, is.null)]
 
   if (length(models_named) < 2) {
@@ -2985,11 +3059,12 @@ build_disease_perf_plot_01 <- function(model_entry, outcome_nm) {
   p_obj +
     ggplot2::labs(title = paste0("Outcome: ", outcome_nm)) +
     ggplot2::theme(
-      plot.title = ggplot2::element_text(size = 26, face = "bold"),
-      axis.title = ggplot2::element_text(size = 22, face = "bold"),
-      axis.text = ggplot2::element_text(size = 18, face = "bold"),
-      legend.title = ggplot2::element_text(size = 20, face = "bold"),
-      legend.text = ggplot2::element_text(size = 17, face = "bold")
+      plot.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title = ggplot2::element_text(size = 11, face = "bold"),
+      axis.text = ggplot2::element_text(size = 9, face = "bold"),
+      axis.text.x = ggplot2::element_text(angle = 12, hjust = 1),
+      legend.title = ggplot2::element_text(size = 10, face = "bold"),
+      legend.text = ggplot2::element_text(size = 8, face = "bold")
     )
 }
 
@@ -3041,7 +3116,7 @@ build_disease_ig_exam_plot_01 <- function(model_entry, outcome_nm, cohort_subtit
     ggplot2::labs(
       title = paste0("Outcome: ", outcome_nm),
       subtitle = cohort_subtitle,
-      x = "ig_gradient",
+      x = x_lab_01,
       y = "PhVAS"
     ) +
     ggplot2::theme_bw(base_size = 20) +
@@ -3076,16 +3151,16 @@ if (length(res_disease_perf_plot_list_01) > 0) {
         title = "Disease Activity Models: compare_performance (Model 1/2/3)",
         subtitle = "No ceiling/floor cohort",
         theme = ggplot2::theme(
-          plot.title = ggplot2::element_text(size = 34, face = "bold"),
-          plot.subtitle = ggplot2::element_text(size = 24, face = "bold")
+          plot.title = ggplot2::element_text(size = 18, face = "bold"),
+          plot.subtitle = ggplot2::element_text(size = 12, face = "bold")
         )
       ) &
       ggplot2::theme(
-        axis.title = ggplot2::element_text(size = 22, face = "bold"),
-        axis.text = ggplot2::element_text(size = 18, face = "bold"),
-        strip.text = ggplot2::element_text(size = 24, face = "bold"),
-        legend.title = ggplot2::element_text(size = 20, face = "bold"),
-        legend.text = ggplot2::element_text(size = 17, face = "bold")
+        axis.title = ggplot2::element_text(size = 11, face = "bold"),
+        axis.text = ggplot2::element_text(size = 9, face = "bold"),
+        strip.text = ggplot2::element_text(size = 11, face = "bold"),
+        legend.title = ggplot2::element_text(size = 10, face = "bold"),
+        legend.text = ggplot2::element_text(size = 8, face = "bold")
       )
   } else {
     # Fallback: faceted bar chart of Performance_Score from compare_performance.
@@ -3104,13 +3179,13 @@ if (length(res_disease_perf_plot_list_01) > 0) {
           x = "Model",
           y = "Performance score"
         ) +
-        theme_minimal(base_size = 26) +
+        theme_minimal(base_size = 11) +
         theme(
-          plot.title = element_text(size = 34, face = "bold"),
-          plot.subtitle = element_text(size = 24, face = "bold"),
-          axis.title = element_text(size = 24, face = "bold"),
-          axis.text = element_text(size = 20, face = "bold"),
-          strip.text = element_text(size = 24, face = "bold")
+          plot.title = element_text(size = 18, face = "bold"),
+          plot.subtitle = element_text(size = 12, face = "bold"),
+          axis.title = element_text(size = 11, face = "bold"),
+          axis.text = element_text(size = 9, face = "bold"),
+          strip.text = element_text(size = 11, face = "bold")
         )
     } else {
       res_disease_perf_multi_plot_01 <- NULL
@@ -3130,8 +3205,8 @@ res_disease_perf_plot_saved_01 <- if (!is.null(res_disease_perf_multi_plot_01)) 
   save_plot_safe_01(
     plot_obj = res_disease_perf_multi_plot_01,
     file_path = res_disease_perf_plot_file_01,
-    width = 16,
-    height = 10,
+    width = 20,
+    height = 12,
     dpi = 300
   )
 } else {
@@ -3158,7 +3233,7 @@ if (length(res_disease_ig_exam_plot_list_01) > 0 && requireNamespace("patchwork"
     ncol = 2
   ) +
     patchwork::plot_annotation(
-      title = "PhVAS vs ig_gradient (Model 3)",
+      title = paste0("PhVAS vs ", x_lab_01, " (Model 3)"),
       subtitle = "No ceiling/floor cohort",
       theme = ggplot2::theme(
         plot.title = ggplot2::element_text(size = 34, face = "bold"),
@@ -3235,11 +3310,7 @@ res_disease_models_all_01 <- outcomes_01 |>
 
     fit_obj <- fit_disease_models_one_outcome_01(dat)
 
-    models_named <- list(
-      `Model 1: clin` = fit_obj$model_a,
-      `Model 2: clin + ig_gradient` = fit_obj$model_b,
-      `Model 3: ig_gradient` = fit_obj$model_c
-    )
+    models_named <- make_models_named_abc_01(fit_obj)
     models_named <- models_named[!map_lgl(models_named, is.null)]
 
     display_labels <- names(models_named)
@@ -3326,16 +3397,16 @@ if (length(res_disease_perf_plot_list_all_01) > 0) {
         title = "Disease Activity Models: compare_performance (Model 1/2/3)",
         subtitle = "All cohort",
         theme = ggplot2::theme(
-          plot.title = ggplot2::element_text(size = 34, face = "bold"),
-          plot.subtitle = ggplot2::element_text(size = 24, face = "bold")
+          plot.title = ggplot2::element_text(size = 18, face = "bold"),
+          plot.subtitle = ggplot2::element_text(size = 12, face = "bold")
         )
       ) &
       ggplot2::theme(
-        axis.title = ggplot2::element_text(size = 22, face = "bold"),
-        axis.text = ggplot2::element_text(size = 18, face = "bold"),
-        strip.text = ggplot2::element_text(size = 24, face = "bold"),
-        legend.title = ggplot2::element_text(size = 20, face = "bold"),
-        legend.text = ggplot2::element_text(size = 17, face = "bold")
+        axis.title = ggplot2::element_text(size = 11, face = "bold"),
+        axis.text = ggplot2::element_text(size = 9, face = "bold"),
+        strip.text = ggplot2::element_text(size = 11, face = "bold"),
+        legend.title = ggplot2::element_text(size = 10, face = "bold"),
+        legend.text = ggplot2::element_text(size = 8, face = "bold")
       )
   } else {
     model_nm_col_all_01 <- intersect(c("Name", "Model", "name", "model"), names(res_disease_model_compare_all_01))
@@ -3353,13 +3424,13 @@ if (length(res_disease_perf_plot_list_all_01) > 0) {
           x = "Model",
           y = "Performance score"
         ) +
-        theme_minimal(base_size = 26) +
+        theme_minimal(base_size = 11) +
         theme(
-          plot.title = element_text(size = 34, face = "bold"),
-          plot.subtitle = element_text(size = 24, face = "bold"),
-          axis.title = element_text(size = 24, face = "bold"),
-          axis.text = element_text(size = 20, face = "bold"),
-          strip.text = element_text(size = 24, face = "bold")
+          plot.title = element_text(size = 18, face = "bold"),
+          plot.subtitle = element_text(size = 12, face = "bold"),
+          axis.title = element_text(size = 11, face = "bold"),
+          axis.text = element_text(size = 9, face = "bold"),
+          strip.text = element_text(size = 11, face = "bold")
         )
     } else {
       res_disease_perf_multi_plot_all_01 <- NULL
@@ -3379,8 +3450,8 @@ res_disease_perf_plot_saved_all_01 <- if (!is.null(res_disease_perf_multi_plot_a
   save_plot_safe_01(
     plot_obj = res_disease_perf_multi_plot_all_01,
     file_path = res_disease_perf_plot_file_all_01,
-    width = 16,
-    height = 10,
+    width = 20,
+    height = 12,
     dpi = 300
   )
 } else {
@@ -3407,7 +3478,7 @@ if (length(res_disease_ig_exam_plot_list_all_01) > 0 && requireNamespace("patchw
     ncol = 2
   ) +
     patchwork::plot_annotation(
-      title = "PhVAS vs ig_gradient (Model 3)",
+      title = paste0("PhVAS vs ", x_lab_01, " (Model 3)"),
       subtitle = "All cohort",
       theme = ggplot2::theme(
         plot.title = ggplot2::element_text(size = 34, face = "bold"),
@@ -3511,11 +3582,7 @@ res_disease_models_cei_flo_01 <- outcomes_01 |>
 
     fit_obj <- fit_disease_models_one_outcome_01(dat)
 
-    models_named <- list(
-      `Model 1: clin` = fit_obj$model_a,
-      `Model 2: clin + ig_gradient` = fit_obj$model_b,
-      `Model 3: ig_gradient` = fit_obj$model_c
-    )
+    models_named <- make_models_named_abc_01(fit_obj)
     models_named <- models_named[!map_lgl(models_named, is.null)]
 
     display_labels <- names(models_named)
@@ -3936,13 +4003,13 @@ d_predperf_base_01 <- d_convert_model_01 |>
       dat |>
         mutate(
           patient_id = factor(patient_id),
-          exam_order_factor = factor(exam_order_factor)
+          exam_order_factor = normalize_exam_factor_01(exam_order_factor)
         )
     } else {
       dat |>
         mutate(
           patient_id = factor(patient_id),
-          exam_order_factor = factor(exam_order)
+          exam_order_factor = normalize_exam_factor_01(exam_order)
         )
     }
   })()
@@ -4036,16 +4103,10 @@ fit_predperf_models_one_outcome_01 <- function(dat_outcome, mode = c("abc", "c_o
 
   if (mode == "abc") {
     fit_obj <- fit_disease_models_one_outcome_01(dat_outcome)
-    models_named <- list(
-      `Model 1: clin` = fit_obj$model_a,
-      `Model 2: clin + ig_gradient` = fit_obj$model_b,
-      `Model 3: ig_gradient` = fit_obj$model_c
-    )
+    models_named <- make_models_named_abc_01(fit_obj)
   } else {
     fit_obj <- fit_predperf_model_c_only_01(dat_outcome)
-    models_named <- list(
-      `Model 3: ig_gradient` = fit_obj$model_c
-    )
+    models_named <- setNames(list(fit_obj$model_c), unname(disease_model_labels_01[["model_c"]]))
   }
 
   models_named <- models_named[!map_lgl(models_named, is.null)]
@@ -4189,11 +4250,7 @@ bootstrap_mae_rmse_ci_01 <- function(pred_df, n_boot = 500, conf_level = 0.95, s
 build_predperf_uncertainty_plot_01 <- function(metric_ci_tbl, outcome_nm, cohort_subtitle) {
   if (nrow(metric_ci_tbl) == 0) return(NULL)
 
-  model_levels <- c(
-    "Model 1: clin",
-    "Model 2: clin + ig_gradient",
-    "Model 3: ig_gradient"
-  )
+  model_levels <- unname(disease_model_labels_01[c("model_a", "model_b", "model_c")])
 
   plot_dat <- metric_ci_tbl |>
     mutate(
@@ -4215,7 +4272,7 @@ build_predperf_uncertainty_plot_01 <- function(metric_ci_tbl, outcome_nm, cohort
       title = paste0("Outcome: ", outcome_nm),
       subtitle = cohort_subtitle,
       x = NULL,
-      y = "Metric value (bootstrap 95% CI)",
+      y = "Metric value\n(bootstrap 95% CI)",
       color = NULL
     ) +
     theme_bw(base_size = 18) +
@@ -4224,7 +4281,7 @@ build_predperf_uncertainty_plot_01 <- function(metric_ci_tbl, outcome_nm, cohort
       plot.subtitle = element_text(size = 18, face = "bold"),
       axis.title = element_text(size = 20, face = "bold"),
       axis.text = element_text(size = 16, face = "bold"),
-      axis.text.x = element_text(angle = 20, hjust = 1),
+      axis.text.x = element_text(angle = 12, hjust = 1),
       strip.text = element_text(size = 18, face = "bold"),
       legend.title = element_blank(),
       legend.text = element_text(size = 15, face = "bold")
@@ -4323,7 +4380,7 @@ build_predperf_grid_plot_01 <- function(models_named, dat_outcome, outcome_nm, c
     labs(
       title = paste0("Outcome: ", outcome_nm),
       subtitle = cohort_subtitle,
-      x = "ig_gradient",
+      x = x_lab_01,
       y = "PhVAS (predicted)",
       color = NULL
     ) +
@@ -4571,7 +4628,7 @@ res_predperf_accuracy_multi_no_cei_flo_01 <- combine_plot_list_01(
 )
 res_predperf_grid_multi_no_cei_flo_01 <- combine_plot_list_01(
   res_predperf_no_cei_flo_01$grid_plot_list,
-  title_txt = "Prediction evaluation on ig_gradient grid",
+  title_txt = paste0("Prediction evaluation on ", x_lab_01, " grid"),
   subtitle_txt = "No ceiling/floor cohort - patients without any boundary value"
 )
 
@@ -4582,7 +4639,7 @@ res_predperf_accuracy_multi_all_01 <- combine_plot_list_01(
 )
 res_predperf_grid_multi_all_01 <- combine_plot_list_01(
   res_predperf_all_01$grid_plot_list,
-  title_txt = "Prediction evaluation on ig_gradient grid",
+  title_txt = paste0("Prediction evaluation on ", x_lab_01, " grid"),
   subtitle_txt = "All cohort"
 )
 
@@ -4593,7 +4650,7 @@ res_predperf_accuracy_multi_ceiling_only_01 <- combine_plot_list_01(
 )
 res_predperf_grid_multi_ceiling_only_01 <- combine_plot_list_01(
   res_predperf_ceiling_only_01$grid_plot_list,
-  title_txt = "Prediction evaluation on ig_gradient grid",
+  title_txt = paste0("Prediction evaluation on ", x_lab_01, " grid"),
   subtitle_txt = "Ceiling/floor cohort: boundary-only patients (Model 3 only)"
 )
 
@@ -4604,7 +4661,7 @@ res_predperf_accuracy_multi_boundary_occ_01 <- combine_plot_list_01(
 )
 res_predperf_grid_multi_boundary_occ_01 <- combine_plot_list_01(
   res_predperf_boundary_occurrence_01$grid_plot_list,
-  title_txt = "Prediction evaluation on ig_gradient grid",
+  title_txt = paste0("Prediction evaluation on ", x_lab_01, " grid"),
   subtitle_txt = "Ceiling/floor occurrence cohort (at least one boundary visit)"
 )
 

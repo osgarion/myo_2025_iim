@@ -1,0 +1,451 @@
+﻿---
+title: "20260309_cei_flo_clinical_report_mvpa_t100_time_min_01 - ceiling/floor report"
+author: "Veru a Jirka Balounovi"
+date: "Compiled on: **2026-03-05**  <br> Last updated **`r format(Sys.time(), '%Y-%m-%d')`**"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{=html}
+<style type="text/css">
+.title {
+  text-align: center;
+}
+.author {
+  font-size: 30px;
+  text-align: center;
+  font-style: italic;
+  font-weight: 300;
+}
+.date {
+  font-weight: 300;
+}
+h1, h2, h3, h4 {
+    font-weight: 600;
+    margin-top: 2em;
+}
+body {text-align: justify}
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    border-left: 5px solid #eee;
+}
+p {
+  text-indent: 2rem;
+}
+table {
+    width:100%;
+}
+.main-container {
+  max-width: 100% !important;
+  margin: auto;
+}
+img{
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+}
+.boxBorder {
+     border: 2px solid #990066;
+     padding: 10px;
+     outline: #990066 solid 5px;
+     outline-offset: 5px;
+   }
+</style>
+```
+# Ceiling/Floor Clinical Report: mvpa_t100_time_min pro klinickou praxi
+
+Datum: 2026-03-05  
+Autor: AI analytik (biostatistika + klinicka interpretace)  
+
+Nejprve jsem pouzil pravidlo pro aktualizaci souboru:
+- porovnat nazvy po odstrenani prvnich 6 znaku (datum prefix),
+- pokud vznikne duplikat, vzit novejsi soubor podle casu modifikace.
+
+Hlavni aktualni zdroje:
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_ig_gradient_hurdle_conversion_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_eda_phvas_dual_kendall_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_disease_activity_models_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_phvas_ig_gradient_ceiling_models_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_prediction_performance_model_comparison_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_res_disease_model3_posthoc_all_01.xlsx`
+- `output/ceil_flo_mvpa_t100_time_min/tables/260309_res_disease_model3_posthoc_cei_flo_01.xlsx`
+
+## 1. Shrnuti pro klinika (1 strana)
+
+Cil: zhodnotit, zda lze `mvpa_t100_time_min` pouzit jako praktickou nahradu klinickych skal (`mmt8`, `mmt10`, `fi2`, `fi3`, `haq`) zejmena u pacientu se stropem/dnem.
+
+Hlavni klinicky zaver:
+- `mvpa_t100_time_min` konzistentne pridava informaci k nekterym skalam (hlavne MMT/FI),
+- ale jako samostatna nahrada klinickeho parametru (`Model 3`) ve vetsine kohort nevyhrava,
+- nejvhodnejsi aktualni pouziti je doplnek, ne substituce.
+
+Verdikt podle skaly:
+
+| Skala | Verdikt | Co to znamena pro praxi |
+|---|---|---|
+| mmt8 | Castecne | `mvpa_t100_time_min` pridava signal, ale samotny klinicky parametr nelze bezpecne nahradit. |
+| mmt10 | Castecne | Stejny vzorec jako mmt8, vhodny doplnek pro longitudinalni sledovani. |
+| fi2 | Omezene | Dobry non-ceiling signal, ale minimum ceiling pripadu limituje robustnost. |
+| fi3 | Omezene az castecne | V boundary-occurrence kohorte muze byt `mvpa_t100_time_min` konkurencni, ale globalne nejde o stabilni nahradu. |
+| haq | Spise ne | `mvpa_t100_time_min` je slabsi a v Modelu 2 casto bez signifikance. |
+
+## 2. Klinicky problem
+
+Strop/dno efekt snizuje citlivost skal:
+- u MMT/FI pri stropech nelze dobre zachytit dalsi zlepseni,
+- u HAQ pri floor (0) nelze dobre zachytit dalsi zlepseni.
+
+`mvpa_t100_time_min` je prubezna, objektivni metrika aktivity a muze pridat informaci tam, kde klinicka skala saturuje.
+
+## 3. Data a kohorta
+
+### 3.1 Vstupni data
+
+- 69 pacientu
+- 1435 radku v long formatu (pacient x navsteva x outcome)
+- navstevy: `M0`, `M3`, `M6`, `M18`, `M30`, `M48`
+- pouzite skaly: `mmt8`, `mmt10`, `fi2`, `fi3`, `haq`
+- prediktor: `mvpa_t100_time_min`
+- anchor aktivita: `ph_vas`
+
+Definice hranic:
+- `mmt8`: strop 80
+- `mmt10`: strop 100
+- `fi2`: strop 100
+- `fi3`: strop 100
+- `haq`: floor 0 (rozsah 0-3)
+
+### 3.2 Velikost analyzovanych kohort (disease activity modely)
+
+All cohort:
+
+| Outcome | n mereni | n pacientu |
+|---|---:|---:|
+| mmt8 | 178 | 60 |
+| mmt10 | 169 | 59 |
+| fi2 | 155 | 57 |
+| fi3 | 166 | 59 |
+| haq | 179 | 60 |
+
+No ceiling/floor cohort:
+
+| Outcome | n mereni | n pacientu |
+|---|---:|---:|
+| mmt8 | 131 | 53 |
+| mmt10 | 130 | 54 |
+| fi2 | 150 | 55 |
+| fi3 | 148 | 55 |
+| haq | 136 | 52 |
+
+Ceiling/floor cohort (podskupina s boundary historii):
+
+| Outcome | n mereni | n pacientu |
+|---|---:|---:|
+| mmt8 | 47 | 23 |
+| mmt10 | 41 | 21 |
+| fi2 | 3 | 1 |
+| fi3 | 13 | 6 |
+| haq | 27 | 16 |
+
+## 4. Analyticky plan
+
+- EDA a Kendall korelace (`mvpa_t100_time_min`, klinicke skaly, `ph_vas`).
+- Conversion model (`mvpa_t100_time_min -> klinicka skala`) s hurdle pristupem a OOF validaci.
+- Disease activity modely:
+  - Model 1: `ph_vas ~ clin + exam + covariates + (1|patient)`
+  - Model 2: `ph_vas ~ clin + mvpa_t100_time_min + exam + covariates + (1|patient)`
+  - Model 3: `ph_vas ~ mvpa_t100_time_min + exam + covariates + (1|patient)`
+- Prediction-performance porovnani modelu napric 4 kohortami + bootstrap CI (RMSE/MAE).
+
+## 5. Vysledky podle klinicke otazky
+
+### 5.1 Jak velky je problem stropu/dna?
+
+Boundary prevalence v OOF conversion analyze:
+
+| Outcome | Typ hranice | Prevalence | n boundary / n total |
+|---|---|---:|---:|
+| mmt8 | ceiling | 28.0% | 58 / 207 |
+| mmt10 | ceiling | 25.3% | 50 / 198 |
+| fi2 | ceiling | 2.7% | 5 / 182 |
+| fi3 | ceiling | 11.2% | 22 / 197 |
+| haq | floor | 23.8% | 50 / 210 |
+
+Klinicky: nejvetsi saturace je u `mmt8`, `mmt10` a `haq`.
+
+### 5.2 Ma `mvpa_t100_time_min` informaci mimo strop/dno?
+
+Kendall tau (non-boundary cast, smer `mvpa_t100_time_min`):
+
+| Outcome | n | Kendall tau | p-hodnota | Delta P90-P10 (95% CI) |
+|---|---:|---:|---:|---:|
+| mmt8 | 149 | 0.229 | 0.000050 | +5.93 (2.88; 9.30) |
+| mmt10 | 148 | 0.263 | 0.000003 | +9.51 (5.73; 13.46) |
+| fi2 | 177 | 0.345 | <0.000001 | +30.26 (20.10; 41.55) |
+| fi3 | 175 | 0.270 | 0.0000001 | +25.11 (16.90; 34.52) |
+| haq | 160 | -0.154 | 0.00488 | -0.393 (-0.639; -0.100) |
+
+Interpretace:
+- mimo boundary je vztah statisticky prukazny u vsech outcome,
+- smer je klinicky konzistentni (vyssi `mvpa_t100_time_min` = lepsi MMT/FI, nizsi HAQ).
+
+```{r fig_kendall, echo=FALSE, out.width='100%', fig.align='center'}
+knitr::include_graphics(c(
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_kendall_mmt8_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_kendall_mmt10_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_kendall_fi2_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_kendall_fi3_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_kendall_haq_01.png"
+))
+```
+
+### 5.3 Jak se chova vztah k `ph_vas` podle exam?
+
+Dual-axis EDA + Kendall (`ph_vas` vs `mvpa_t100_time_min` a `ph_vas` vs klinicky parametr) ukazuje:
+- nejsilnejsi a nejstabilnejsi signal je na baseline `M0`,
+- pozdeji je vztah slabsi a variabilnejsi (mensi n, vice heterogenity),
+- `ph_vas` vs klinicky parametr ma na `M0` obecne silnejsi tau nez `ph_vas` vs `mvpa_t100_time_min`.
+
+```{r fig_phvas_dual, echo=FALSE, out.width='100%', fig.align='center'}
+knitr::include_graphics(c(
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_phvas_dual_mmt8_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_phvas_dual_mmt10_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_phvas_dual_fi2_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_phvas_dual_fi3_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_eda_phvas_dual_haq_01.png"
+))
+```
+
+### 5.4 Dokaze `mvpa_t100_time_min` predikovat klinickou skalu?
+
+OOF global metriky conversion modelu:
+
+| Outcome | MAE | RMSE | R2 |
+|---|---:|---:|---:|
+| mmt8 | 5.63 | 7.22 | 0.198 |
+| mmt10 | 7.50 | 9.45 | 0.217 |
+| fi2 | 19.27 | 23.67 | 0.183 |
+| fi3 | 21.64 | 26.28 | 0.157 |
+| haq | 0.562 | 0.679 | 0.063 |
+
+Boundary klasifikace (AUC / PR-AUC):
+- `mmt8`: 0.668 / 0.429
+- `mmt10`: 0.666 / 0.399
+- `fi2`: 0.227 / 0.022 (slabe)
+- `fi3`: 0.662 / 0.240
+- `haq`: 0.617 / 0.333
+
+BA-like trend chyby (`diff ~ mean`) ukazuje proporcionalni bias u vsech outcome (`trend_slope` cca 0.84 az 1.19, vsechny p << 0.001).
+
+Decision sheet (usability):
+- `mmt8`, `mmt10`: `partially_usable`
+- `fi2`, `fi3`, `haq`: `limited`
+
+### 5.5 Disease activity modely (`ph_vas`) a post-hoc
+
+Model 2 (`clin + mvpa_t100_time_min`) vs Model 1 (`clin`) :
+- All cohort: Model 2 vychazi nejlepe pro `mmt8`, `mmt10`, `fi2`, `fi3`; u `haq` je vyhoda modelu 1/2 prakticky remiza.
+- No ceiling/floor cohort: stejny vzorec, ale u `haq` je lepsi Model 1.
+
+Fixni efekt `mvpa_t100_time_min` v Modelu 2:
+- signifikantni pro `mmt8`, `mmt10`, `fi2`, `fi3` (all i no-cei/flo),
+- nesignifikantni pro `haq` (all p=0.147; no-cei/flo p=0.239).
+
+Post-hoc Model 3 (all cohort; nove kontrasty `M0-M3`, `M0-M6`, `M0-M18`):
+- vsechny tri kontrasty jsou signifikantni u vsech outcome (`mmt8`, `mmt10`, `fi2`, `fi3`, `haq`),
+- vsechny odhady jsou zaporne (tj. proti `M0` je odhad na pozdejsich navstevach nizsi),
+- velikost efektu je konzistentne nejvetsi pro `M0-M18` (priblizne -26 az -27 napric outcome; p << 0.001).
+
+Post-hoc Model 3 (ceiling/floor cohort; stejne kontrasty):
+- `mmt8`: signifikantni `M0-M3`, `M0-M6`, `M0-M18`  
+  (napr. `M0-M18`: estimate -26.5; 95% CI -36.7 az -16.4; p=3.06e-07),
+- `mmt10`: signifikantni `M0-M3`, `M0-M6`, `M0-M18`  
+  (napr. `M0-M18`: estimate -13.9; 95% CI -25.1 az -2.79; p=0.0143),
+- `haq`: signifikantni `M0-M3`, `M0-M6`, `M0-M18`  
+  (napr. `M0-M6`: estimate -43.9; 95% CI -54.1 az -33.8; p=3.01e-17),
+- `fi2`, `fi3`: post-hoc v teto kohorte nelze robustne odhadnout (NA; velmi maly vzorek).
+
+Strict ceiling-only model (`ph_vas ~ mvpa_t100_time_min + covariates`):
+- `mmt8`: beta -10.9, p=0.48
+- `mmt10`: beta -13.6, p=0.25
+- `fi2`, `fi3`: insufficient data
+
+```{r fig_perf, echo=FALSE, out.width='100%', fig.align='center'}
+knitr::include_graphics(c(
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_disease_activity_compare_performance_all_cohort_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_disease_activity_compare_performance_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_disease_activity_phvas_ig_gradient_exam_all_cohort_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_disease_activity_phvas_ig_gradient_exam_no_cei_flo_01.png"
+))
+```
+
+### 5.6 Prediction performance - model comparison (nova cast)
+
+Porovnani podle RMSE (soubor `260309_prediction_performance_model_comparison_01.xlsx`):
+
+| Kohorta | Co nejcasteji vyhrava | Klinicka interpretace |
+|---|---|---|
+| No ceiling/floor cohort | Model 1 (`clin`) | V ciste non-boundary casti klinicky parametr sam o sobe funguje nejlip. |
+| All cohort | Prevazne Model 2 (`clin + mvpa_t100_time_min`) | `mvpa_t100_time_min` pridava inkrementalni informaci. |
+| Ceiling/floor only | Bez robustnich modelu | Data nedostatecna (0 validnich modelu). |
+| Ceiling/floor occurrence | Prevazne Model 2, vyjimka `fi3` kde vyhral Model 3 | Nahrada jen `mvpa_t100_time_min` neni stabilni napric outcome. |
+
+Primo k otazce nahrady kliniky:
+- `Model 3 (mvpa_t100_time_min)` **neni konzistentne nejlepsi**.
+- Tam, kde je prinos, je typicky ve forme **Modelu 2 (clin + mvpa_t100_time_min)**.
+- Z biostatistickeho i klinickeho pohledu tedy plati: `mvpa_t100_time_min` je vhodny **doplnek**, ne obecna nahrada.
+
+Bootstrap 95% CI (RMSE/MAE) ukazuji velke prekryvy mezi Model 1 a 2 u casti outcome, ale Model 3 je casto horsi (hlavne `haq`, `mmt10`, `mmt8` v all cohort).
+
+```{r fig_predperf, echo=FALSE, out.width='100%', fig.align='center'}
+knitr::include_graphics(c(
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_accuracy_no_cei_flo_no_boundary_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_uncertainty_no_cei_flo_no_boundary_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_accuracy_all_cohort_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_uncertainty_all_cohort_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_accuracy_boundary_occurrence_01.png",
+  "../../output/ceil_flo_mvpa_t100_time_min/figures/260309_predperf_uncertainty_boundary_occurrence_01.png"
+))
+```
+
+## 6. Rozhodovaci tabulka pro praxi
+
+| Skala | Mira stropu/dna | Signal `mvpa_t100_time_min` mimo boundary | Vyhra modelu | Lze nahradit klinicky parametr? | Doporuceni |
+|---|---|---|---|---|---|
+| mmt8 | Vysoka (28%) | Ano (tau 0.229) | Casto Model 2 | Ne | Drzet kliniku + pridat `mvpa_t100_time_min` pro doplneni trendu. |
+| mmt10 | Vysoka (25%) | Ano (tau 0.263) | Casto Model 2 | Ne | Stejne jako mmt8. |
+| fi2 | Nizka (2.7%) | Ano (tau 0.345) | Model 2, ale malo boundary dat | Ne (zatim) | Potreba vice ceiling pripadu. |
+| fi3 | Stredni (11.2%) | Ano (tau 0.270) | Casto Model 2, nekdy Model 3 | Spise ne | Potencial v subskupinach, ale ne globalni nahrada. |
+| haq | Vysoka floor (23.8%) | Slabsi (tau -0.154) | Model 1/2 remiza, Model 3 horsi | Ne | Klinicka skala zustava primarni. |
+
+## 7. Co delat v ordinaci
+
+1. Primarne rozhodovat dle klinicke skaly.
+2. U strop/floor pacientu pridat trend `mvpa_t100_time_min` mezi navstevami.
+3. Pokud je klinika stabilni, ale `mvpa_t100_time_min` meni trend, overit to proti `ph_vas` a klinickemu obrazu.
+
+Prakticky: `mvpa_t100_time_min` je vhodny jako early-signal a doplnkovy digitalni marker, ne jako samostatny rozhodovaci endpoint.
+
+## 8. Omezeni a jistota zaveru
+
+- Nektere analyzy byly generovany v ruzne dny (03.-05.03.2026), proto byla provedena deduplikace podle nazvu bez datum prefixu + vyber novejsiho souboru.
+- Pozdni navstevy (hlavne `M48`) maji maly n.
+- Ceiling/floor-only kohorty jsou male; u `fi2/fi3` cast analyz selhava.
+- BA-like analyza ukazuje proporcionalni bias u vsech skal.
+
+## Hlavni klinicky zaver
+
+V teto kohorte `mvpa_t100_time_min` zatim **neni vhodny jako plna nahrada** `mmt8/mmt10/fi2/fi3/haq`.  
+Nejstabilnejsi prinos je v kombinaci s klinickym parametrem (`Model 2`), tedy jako **doplnek** pro longitudinalni monitoring a pro situace se strop/floor omezenim.
+
+# Session info
+
+<details>
+
+<summary>Platform</summary>
+
+```{r session_info_1}
+sys_info <- Sys.info()
+df_session_platform <- data.frame(
+  Setting = c(
+    "R version",
+    "Platform",
+    "Running",
+    "System",
+    "Release",
+    "Machine",
+    "User",
+    "Node"
+  ),
+  Value = c(
+    R.version.string,
+    R.version$platform,
+    if (!is.null(R.version$running)) R.version$running else NA_character_,
+    unname(sys_info["sysname"]),
+    unname(sys_info["release"]),
+    unname(sys_info["machine"]),
+    unname(sys_info["user"]),
+    unname(sys_info["nodename"])
+  ),
+  stringsAsFactors = FALSE
+)
+
+kbl_platform <- knitr::kable(
+  df_session_platform,
+  booktabs = TRUE,
+  align = "l",
+  caption = "(ref:Reproducibility-SessionInfo-R-environment-title)",
+  caption.short = " "
+)
+
+if (requireNamespace("kableExtra", quietly = TRUE)) {
+  kbl_platform <- kableExtra::kable_styling(
+    kbl_platform,
+    full_width = FALSE,
+    latex_options = c("hold_position"),
+    bootstrap_options = c("striped", "hover", "condensed", "responsive")
+  )
+}
+
+kbl_platform
+```
+
+</details>
+
+<details>
+
+<summary>Used packages</summary>
+
+```{r session_info_2}
+if (requireNamespace("sessioninfo", quietly = TRUE)) {
+  session_pkgs <- as.data.frame(sessioninfo::package_info(), stringsAsFactors = FALSE)
+
+  if ("attached" %in% names(session_pkgs)) {
+    session_pkgs <- session_pkgs[
+      !is.na(session_pkgs$attached) & session_pkgs$attached,
+      ,
+      drop = FALSE
+    ]
+  }
+
+  keep_cols <- intersect(c("package", "loadedversion", "date"), names(session_pkgs))
+  session_pkgs <- session_pkgs[, keep_cols, drop = FALSE]
+} else {
+  session_pkgs <- data.frame(
+    package = "sessioninfo (not installed)",
+    loadedversion = NA_character_,
+    date = NA_character_,
+    stringsAsFactors = FALSE
+  )
+}
+
+knitr::kable(session_pkgs, booktabs = TRUE)
+```
+
+</details>
+
+<br> <br> <br> <br> <br> <br>
+
+::: {.tocify-extend-page data-unique="tocify-extend-page" style="height: 0;"}
+:::
+
+
+
+

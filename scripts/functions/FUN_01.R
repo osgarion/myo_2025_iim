@@ -3,7 +3,10 @@
 if (requireNamespace("conflicted", quietly = TRUE)) {
   conflicted::conflicts_prefer(recipes::update)
 }
-pacman::p_load(update = T,  
+pacman_update_01 <- getOption("myo_pacman_update", TRUE)
+pacman_install_01 <- getOption("myo_pacman_install", TRUE)
+
+pacman::p_load(update = pacman_update_01, install = pacman_install_01,
                equatiomatic, beepr, tictoc, 
                tidyverse, purrr, furrr, easystats, rio, janitor, ggthemes, car,
                gtsummary, skimr, sjPlot, flextable, ggpubr, rstatix, tidymodels,
@@ -14,7 +17,11 @@ pacman::p_load(update = T,
 )
 
 # Missing values, multivariate analyses
-pacman::p_load(naniar, MVN, visdat) 
+pacman::p_load(
+  naniar, MVN, visdat,
+  update = pacman_update_01,
+  install = pacman_install_01
+)
 
 ## function specification ----
 conflicted::conflicts_prefer(
@@ -51,7 +58,10 @@ options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
 
 
 ## Number of cores ----
-ncores <- availableCores() -1
+ncores_default_01 <- max(1L, min(4L, future::availableCores() - 1L))
+ncores <- as.integer(getOption("myo_ncores", ncores_default_01))
+if (!is.finite(ncores) || is.na(ncores)) ncores <- ncores_default_01
+ncores <- max(1L, ncores)
 
 ## Okabe & Ito palette - colorblind palette ----
 pal_okabe_ito <- colorblind_pal()(8)[2:8] # ggthemes
