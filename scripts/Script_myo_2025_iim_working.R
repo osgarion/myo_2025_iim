@@ -3,6 +3,439 @@ back_up("scripts/functions/FUN_01.R") # the the destination subdirectory specify
 back_up("scripts/functions/OBJ_01.R") # the the destination subdirectory specify using 'path_dest'
 back_up("scripts/Script_myo_2025_iim_working.R") # the the destination subdirectory specify using 'path_dest'
 
+# 260309 ----
+
+
+
+
+
+
+# # přidání row_id
+# d18_ggir_data_with_id <- d18_ggir_tis_data |>
+#   dplyr::mutate(row_id = dplyr::row_number())
+# 
+# safe_future_workers_01 <- max(4L, future::availableCores() - 1L)
+# 
+# future::plan(future::multisession, workers = safe_future_workers_01)
+# 
+# # imputace pouze vybraných proměnných
+# imp_data <- d18_ggir_data_with_id |>
+#   dplyr::select(row_id, exam, any_of(sel_tis_d18_data_01)) |>
+#   mice::futuremice(
+#     m = safe_future_workers_01,
+#     maxit = 15,
+#     method = "pmm",
+#     n.core = safe_future_workers_01,
+#     parallelseed = 123,
+#     future.plan = "multisession",
+#     ridge = 1e-02,
+#     remove.collinear = TRUE,
+#     remove.constant = TRUE
+#   ) |>
+#   mice::complete()
+# 
+# # vrácení imputovaných hodnot
+# d18_ggir_data_tis_imp <- d18_ggir_data_with_id |>
+#   dplyr::rows_patch(
+#     imp_data,
+#     by = "row_id"
+#   ) |>
+#   dplyr::select(-row_id)
+# 
+# future::plan("sequential")
+
+export(d18_ggir_data_tis_imp, "data/processed/260310_d18_tis_imp_01.xlsx")
+
+
+# polar figure
+require(ggiraphExtra)
+require(ggplot2)
+
+## all
+d18_ggir_data |>
+  select(starts_with("p9")) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "var_name",
+    values_to = "var_val"
+  ) |>
+  filter(!is.na(var_val)) |>
+  group_by(var_name) |>
+  summarise(
+    p05 = quantile(var_val, 0.05, na.rm = TRUE),
+    p25 = quantile(var_val, 0.25, na.rm = TRUE),
+    p50 = quantile(var_val, 0.50, na.rm = TRUE),
+    p75 = quantile(var_val, 0.75, na.rm = TRUE),
+    p95 = quantile(var_val, 0.95, na.rm = TRUE),
+    p100 = max(var_val, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    `0-5`   = p05,
+    `5-25`  = p25 - p05,
+    `25-50` = p50 - p25,
+    `50-75` = p75 - p50,
+    `75-95` = p95 - p75,
+    `95-100` = p100 - p95
+  ) |>
+  select(var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+  pivot_longer(
+    cols = -var_name,
+    names_to = "percentil",
+    values_to = "rozpeti"
+  ) |>
+  mutate(
+    percentil = factor(
+      percentil,
+      levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+    )
+  ) |>
+  ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
+  geom_col(width = 1, linewidth = 0.1) +
+  scale_fill_brewer(palette = "Reds", direction = -1) +
+  coord_polar() +
+  geom_abline(slope=0, intercept=100,  col = "black",lty=2) +
+  geom_abline(slope=0, intercept=40,  col = "black",lty=2) +
+  annotate('text', x = 0, y = c(50, 100, 200, 300, 400), 
+           label = c('50','100', '200', '300', '400')) +
+  theme_minimal()
+
+
+## facet exam
+lab_data <- expand.grid(
+  exam = unique(d18_ggir_data$exam),
+  y = c(50, 100, 200, 300, 400)
+) |>
+  tibble::as_tibble() |>
+  dplyr::mutate(
+    x = 0,
+    label = as.character(y)
+  )
+
+d18_ggir_data |>
+  select(starts_with("p9"), exam) |>
+  pivot_longer(
+    cols = -exam,
+    names_to = "var_name",
+    values_to = "var_val"
+  ) |>
+  filter(!is.na(var_val)) |>
+  group_by(exam, var_name) |>
+  summarise(
+    p05 = quantile(var_val, 0.05, na.rm = TRUE),
+    p25 = quantile(var_val, 0.25, na.rm = TRUE),
+    p50 = quantile(var_val, 0.50, na.rm = TRUE),
+    p75 = quantile(var_val, 0.75, na.rm = TRUE),
+    p95 = quantile(var_val, 0.95, na.rm = TRUE),
+    p100 = max(var_val, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    `0-5`    = p05,
+    `5-25`   = p25 - p05,
+    `25-50`  = p50 - p25,
+    `50-75`  = p75 - p50,
+    `75-95`  = p95 - p75,
+    `95-100` = p100 - p95
+  ) |>
+  select(exam, var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+  pivot_longer(
+    cols = -c(exam, var_name),
+    names_to = "percentil",
+    values_to = "rozpeti"
+  ) |>
+  mutate(
+    percentil = factor(
+      percentil,
+      levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+    )
+  ) |>
+  ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
+  geom_col(width = 1, linewidth = 0.1) +
+  scale_fill_brewer(palette = "Reds", direction = -1) +
+  coord_polar() +
+  geom_abline(slope = 0, intercept = 100, col = "black", lty = 2) +
+  geom_abline(slope = 0, intercept = 40, col = "black", lty = 2) +
+  geom_text(
+    data = lab_data,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE
+  ) +
+  facet_wrap(~exam) +
+  theme_minimal()
+
+
+## facet exam and disease subtype
+pdf(file.path("output/figures", 
+              paste0(format(Sys.Date(), "%y%m%d"),
+                     "_", 
+                     "ggir_activ_p9x_01.pdf")), 
+    width = 10, height = 7)
+plot_percentile_radar(d18_ggir_data)
+plot_percentile_radar(d18_ggir_data, disease_type = 0)
+plot_percentile_radar(d18_ggir_data, disease_type = 2)
+plot_percentile_radar(d18_ggir_data, disease_type = 5)
+dev.off()
+
+pdf(file.path("output/figures", 
+              paste0(format(Sys.Date(), "%y%m%d"),
+                     "_", 
+                     "ggir_activ_p9x_02.pdf")), 
+    width = 10, height = 7)
+plot_percentile_radar_02(d18_ggir_data |> 
+                           full_join(d18_tis_comp_01 |> 
+                                       select(immet_id,exam, tis_response))
+)
+plot_percentile_radar_02(d18_ggir_data |> 
+                           full_join(d18_tis_comp_01 |> 
+                                       select(immet_id,exam, tis_response)),
+                         tis_response_type = "none")
+plot_percentile_radar_02(d18_ggir_data |> 
+                           full_join(d18_tis_comp_01 |> 
+                                       select(immet_id,exam, tis_response)),
+                         tis_response_type = "minimal")
+plot_percentile_radar_02(d18_ggir_data |> 
+                           full_join(d18_tis_comp_01 |> 
+                                       select(immet_id,exam, tis_response)),
+                         tis_response_type = "moderate")
+plot_percentile_radar_02(d18_ggir_data |> 
+                           full_join(d18_tis_comp_01 |> 
+                                       select(immet_id,exam, tis_response)),
+                         tis_response_type = "major")
+dev.off()
+
+pdf(file.path("output/figures", 
+              paste0(format(Sys.Date(), "%y%m%d"),
+                     "_", 
+                     "ggir_activ_p9x_03.pdf")), 
+    width = 10, height = 7)
+plot_percentile_radar_tis_m6(d18_ggir_data |> 
+                               full_join(d18_tis_comp_01 |> 
+                                           select(immet_id,exam, tis_response)),
+                             tis_response_type = "none")
+plot_percentile_radar_tis_m6(d18_ggir_data |> 
+                               full_join(d18_tis_comp_01 |> 
+                                           select(immet_id,exam, tis_response)),
+                             tis_response_type = "minimal")
+
+plot_percentile_radar_tis_m6(d18_ggir_data |> 
+                               full_join(d18_tis_comp_01 |> 
+                                           select(immet_id,exam, tis_response)),
+                             tis_response_type = "moderate")
+
+plot_percentile_radar_tis_m6(d18_ggir_data |> 
+                               full_join(d18_tis_comp_01 |> 
+                                           select(immet_id,exam, tis_response)),
+                             tis_response_type = "major")
+dev.off()
+
+
+pdf(file.path("output/figures", 
+              paste0(format(Sys.Date(), "%y%m%d"),
+                     "_", 
+                     "ggir_activ_p9x_04.pdf")), 
+    width = 10, height = 7)
+plot_percentile_radar_tis_m18(d18_ggir_data |> 
+                                full_join(d18_tis_comp_01 |> 
+                                            select(immet_id,exam, tis_response)),
+                              tis_response_type = "none")
+plot_percentile_radar_tis_m18(d18_ggir_data |> 
+                                full_join(d18_tis_comp_01 |> 
+                                            select(immet_id,exam, tis_response)),
+                              tis_response_type = "minimal")
+
+plot_percentile_radar_tis_m18(d18_ggir_data |> 
+                                full_join(d18_tis_comp_01 |> 
+                                            select(immet_id,exam, tis_response)),
+                              tis_response_type = "moderate")
+
+plot_percentile_radar_tis_m18(d18_ggir_data |> 
+                                full_join(d18_tis_comp_01 |> 
+                                            select(immet_id,exam, tis_response)),
+                              tis_response_type = "major")
+dev.off()
+
+
+
+# count table
+data_counts_ggir_tis <- d18_ggir_data |>
+  full_join(
+    d18_tis_comp_01 |>
+      select(immet_id, exam, tis_response),
+    by = c("immet_id", "exam")
+  ) |>
+  mutate(tis_response = as.factor(tis_response)) |>
+  group_by(immet_id) |>
+  mutate(
+    tis_response_2 = tis_response[match("M6", exam)]
+  ) |>
+  ungroup()
+
+
+tab_tis_wide <- data_counts_ggir_tis |>
+  count(exam, tis_response) |>
+  pivot_wider(
+    names_from = tis_response,
+    values_from = n,
+    values_fill = 0
+  )
+
+tab_tis_m6_wide <- data_counts_ggir_tis |>
+  count(exam, tis_response_2) |>
+  arrange(exam, tis_response_2) |> 
+  pivot_wider(
+    names_from = tis_response_2,
+    values_from = n,
+    values_fill = 0
+  )
+
+tab_subtype_wide <- data_counts_ggir_tis |>
+  count(exam, subtype) |>
+  arrange(exam, subtype) |> 
+  pivot_wider(
+    names_from = subtype,
+    values_from = n,
+    values_fill = 0
+  )
+
+export(list(
+  disease_subtype = tab_subtype_wide,
+  tis_response = tab_tis_wide,
+  tis_response_m6 = tab_tis_m6_wide
+), "output/tables/260311_count_radar_01.xlsx")
+
+## all exam in one figure
+library(tidyverse)
+library(ggradar)
+
+df <- d18_ggir_data |>
+  select(starts_with("p9"), exam) |>
+  pivot_longer(
+    cols = -exam,
+    names_to = "var_name",
+    values_to = "var_val"
+  ) |>
+  filter(!is.na(var_val)) |>
+  group_by(exam, var_name) |>
+  summarise(
+    med = median(var_val, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  pivot_wider(
+    names_from = var_name,
+    values_from = med
+  ) |>
+  as.data.frame()
+
+radar_max <- df |>
+  select(-exam) |>
+  unlist(use.names = FALSE) |>
+  max(na.rm = TRUE)
+
+
+
+ggradar(
+  df,
+  values.radar = c("50", "100", "150", "200", "250"),
+  grid.min = 50,
+  grid.mid = 150,
+  grid.max = 250,
+  group.line.width = 1,
+  group.point.size = 3,
+  group.colours = paletteer::paletteer_d("ggprism::colorblind_safe"),
+  background.circle.colour = "white",
+  gridline.mid.colour = "grey",
+  fill.alpha = 0.9,
+  legend.position = "bottom"
+)
+
+
+
+
+
+### not appropriate
+(d18_ggir_fig_polar_01 <- d18_ggir_data |>
+  select(starts_with("p9"), exam) |>
+  pivot_longer(
+    cols = -exam,
+    names_to = "var_name",
+    values_to = "var_val"
+  ) |>
+  filter(!is.na(var_val)) |> 
+  group_by(var_name) |>
+  mutate(
+    p05 = quantile(var_val, 0.05, na.rm = TRUE),
+    p25 = quantile(var_val, 0.25, na.rm = TRUE),
+    p50 = quantile(var_val, 0.50, na.rm = TRUE),
+    p75 = quantile(var_val, 0.75, na.rm = TRUE),
+    p95 = quantile(var_val, 0.95, na.rm = TRUE),
+    percentil = case_when(
+      is.na(var_val)   ~ NA_character_,
+      var_val <= p05   ~ "5",
+      var_val <= p25   ~ "25",
+      var_val <= p50   ~ "50",
+      var_val <= p75   ~ "75",
+      var_val <= p95   ~ "95",
+      var_val >  p95   ~ ">95"
+    ),
+    percentil = factor(percentil, levels = c(">95", "95", "75", "50", "25", "5"))
+  ) |>
+  ungroup() |>
+  select(var_name, var_val, percentil, exam) |> 
+  ggplot(aes(x=var_name, y = var_val, fill = percentil))+
+  geom_bar(stat="identity", width = 1, size = 0.1) +
+  scale_fill_brewer(palette="Reds", direction =  -1) +
+  coord_polar() +
+  geom_abline(slope=0, intercept=10000,  col = "black",lty=2) +
+  geom_abline(slope=0, intercept=4000,  col = "black",lty=2) +
+  annotate('text', x = 0, y = c(5000, 10000, 20000, 30000, 40000), 
+           label = c('50','100', '200', '300', '400')) +
+  theme(axis.label.y = element_blank()) +
+  theme_minimal())
+
+
+(d18_ggir_fig_polar_02 <- d18_ggir_data |>
+    select(starts_with("p9"), exam) |>
+    pivot_longer(
+      cols = -exam,
+      names_to = "var_name",
+      values_to = "var_val"
+    ) |>
+    filter(!is.na(var_val)) |> 
+    group_by(var_name, exam) |>
+    mutate(
+      p05 = quantile(var_val, 0.05, na.rm = TRUE),
+      p25 = quantile(var_val, 0.25, na.rm = TRUE),
+      p50 = quantile(var_val, 0.50, na.rm = TRUE),
+      p75 = quantile(var_val, 0.75, na.rm = TRUE),
+      p95 = quantile(var_val, 0.95, na.rm = TRUE),
+      percentil = case_when(
+        is.na(var_val)   ~ NA_character_,
+        var_val <= p05   ~ "5",
+        var_val <= p25   ~ "25",
+        var_val <= p50   ~ "50",
+        var_val <= p75   ~ "75",
+        var_val <= p95   ~ "95",
+        var_val >  p95   ~ ">95"
+      ),
+      percentil = factor(percentil, levels = c(">95", "95", "75", "50", "25", "5"))
+    ) |>
+    ungroup() |>
+    select(var_name, var_val, percentil, exam) |> 
+    ggplot(aes(x=var_name, y = var_val, fill = percentil))+
+    geom_bar(stat="identity", width = 1, size = 0.1) +
+    scale_fill_brewer(palette="Reds", direction =  -1) +
+    coord_polar() +
+    geom_abline(slope=0, intercept=10000,  col = "black",lty=2) +
+    geom_abline(slope=0, intercept=4000,  col = "black",lty=2) +
+    facet_wrap(~exam, scales = "free")+
+    annotate('text', x = 0, y = c(5000, 10000, 20000, 30000, 40000), 
+             label = c('50','100', '200', '300', '400')) +
+    theme(axis.label.y = element_blank()) +
+    theme_minimal()
+  )
+
+
 # 260124 ----
 # ============================================================
 # MOFA2: activity + clinical (from d12_mofa; complete script)

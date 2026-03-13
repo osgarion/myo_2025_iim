@@ -1100,6 +1100,457 @@ save_tiff <- function(p, fname, res = 150, w = 1600, h = 1200) {
 }
 
 
+
+# radar figure
+plot_percentile_radar <- function(data, disease_type = "all") {
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(tibble)
+  
+  # FILTR DAT
+
+  if (!identical(disease_type, "all")) {
+    
+    data <- data |>
+      dplyr::filter(subtype == as.numeric(disease_type))
+    
+    title_text <- paste0("subtype: ", disease_type)
+    
+  } else {
+    
+    title_text <- "subtype: all"
+    
+  }
+
+  # RADIAL LABELS
+  lab_data <- expand.grid(
+    exam = unique(data$exam),
+    y = c(50, 100, 200, 300, 400)
+  ) |>
+    tibble::as_tibble() |>
+    dplyr::mutate(
+      x = 0,
+      label = as.character(y)
+    )
+  
+  
+  # MAPPING NAMES
+  name_map <- c(
+    "p9931_enmo" = "M010",
+    "p9861_enmo" = "M020",
+    "p9792_enmo" = "M030",
+    "p9688_enmo" = "M045",
+    "p9583_enmo" = "M060",
+    "p9375_enmo" = "M090",
+    "p9167_enmo" = "M120"
+  )
+  
+  # MAIN PIPELINE
+  data |> 
+    dplyr::select(dplyr::starts_with("p9"), exam) |>
+    tidyr::pivot_longer(
+      cols = -exam,
+      names_to = "var_name",
+      values_to = "var_val"
+    ) |>
+    mutate(
+      var_name = dplyr::recode(var_name, !!!name_map)
+    ) |>
+    dplyr::filter(!is.na(var_val)) |>
+    dplyr::group_by(exam, var_name) |>
+    dplyr::summarise(
+      p05 = quantile(var_val, 0.05, na.rm = TRUE),
+      p25 = quantile(var_val, 0.25, na.rm = TRUE),
+      p50 = quantile(var_val, 0.50, na.rm = TRUE),
+      p75 = quantile(var_val, 0.75, na.rm = TRUE),
+      p95 = quantile(var_val, 0.95, na.rm = TRUE),
+      p100 = max(var_val, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      `0-5`    = p05,
+      `5-25`   = p25 - p05,
+      `25-50`  = p50 - p25,
+      `50-75`  = p75 - p50,
+      `75-95`  = p95 - p75,
+      `95-100` = p100 - p95
+    ) |>
+    dplyr::select(exam, var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+    tidyr::pivot_longer(
+      cols = -c(exam, var_name),
+      names_to = "percentil",
+      values_to = "rozpeti"
+    ) |>
+    dplyr::mutate(
+      percentil = factor(
+        percentil,
+        levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+      )
+    ) |>
+    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    geom_col(width = 1, linewidth = 0.1) +
+    scale_fill_brewer(palette = "Reds", direction = -1) +
+    coord_polar() +
+    geom_abline(slope = 0, intercept = 100, col = "black", lty = 2) +
+    geom_abline(slope = 0, intercept = 40, col = "black", lty = 2) +
+    geom_text(
+      data = lab_data,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE
+    ) +
+    facet_wrap(~exam) +
+    labs(title = title_text) +
+    theme_minimal()+
+    theme(
+      axis.title = element_blank(),
+      axis.text.y  = element_blank(),
+      axis.ticks.y = element_blank()
+    )
+}
+
+plot_percentile_radar_02 <- function(data, tis_response_type = "all") {
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(tibble)
+  
+  # příprava dat
+  data <- data |>
+    mutate(
+      tis_response = as.factor(tis_response)
+    ) |>
+    filter(exam != "M0")
+  
+  # FILTR DAT
+  if (!identical(tis_response_type, "all")) {
+    
+    data <- data |>
+      filter(.data$tis_response == tis_response_type)
+    
+    title_text <- paste0("tis_response: ", tis_response_type)
+    
+  } else {
+    
+    title_text <- "tis_response: all"
+    
+  }
+  
+  # RADIAL LABELS
+  lab_data <- expand.grid(
+    exam = unique(data$exam),
+    y = c(50, 100, 200, 300, 400)
+  ) |>
+    tibble::as_tibble() |>
+    mutate(
+      x = 0,
+      label = as.character(y)
+    )
+  
+  # MAPPING NAMES
+  name_map <- c(
+    "p9931_enmo" = "M010",
+    "p9861_enmo" = "M020",
+    "p9792_enmo" = "M030",
+    "p9688_enmo" = "M045",
+    "p9583_enmo" = "M060",
+    "p9375_enmo" = "M090",
+    "p9167_enmo" = "M120"
+  )
+  
+  # MAIN PIPELINE
+  data |> 
+    select(starts_with("p9"), exam) |>
+    pivot_longer(
+      cols = -exam,
+      names_to = "var_name",
+      values_to = "var_val"
+    ) |>
+    mutate(
+      var_name = dplyr::recode(var_name, !!!name_map)
+    ) |>
+    filter(!is.na(var_val)) |>
+    group_by(exam, var_name) |>
+    summarise(
+      p05 = quantile(var_val, 0.05, na.rm = TRUE),
+      p25 = quantile(var_val, 0.25, na.rm = TRUE),
+      p50 = quantile(var_val, 0.50, na.rm = TRUE),
+      p75 = quantile(var_val, 0.75, na.rm = TRUE),
+      p95 = quantile(var_val, 0.95, na.rm = TRUE),
+      p100 = max(var_val, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(
+      `0-5`    = p05,
+      `5-25`   = p25 - p05,
+      `25-50`  = p50 - p25,
+      `50-75`  = p75 - p50,
+      `75-95`  = p95 - p75,
+      `95-100` = p100 - p95
+    ) |>
+    select(exam, var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+    pivot_longer(
+      cols = -c(exam, var_name),
+      names_to = "percentil",
+      values_to = "rozpeti"
+    ) |>
+    mutate(
+      percentil = factor(
+        percentil,
+        levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+      )
+    ) |>
+    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    geom_col(width = 1, linewidth = 0.1) +
+    scale_fill_brewer(palette = "Reds", direction = -1) +
+    coord_polar() +
+    geom_abline(slope = 0, intercept = 100, col = "black", lty = 2) +
+    geom_abline(slope = 0, intercept = 40, col = "black", lty = 2) +
+    geom_text(
+      data = lab_data,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE
+    ) +
+    facet_wrap(~exam) +
+    labs(title = title_text) +
+    theme_minimal() +
+    theme(
+      axis.title = element_blank(),
+      axis.text.y  = element_blank(),
+      axis.ticks.y = element_blank()
+    )
+}
+
+plot_percentile_radar_tis_m6 <- function(data, tis_response_type = "all") {
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(tibble)
+  
+  # vytvoření tis_response_2 (hodnota z M6 pro všechny exam pacienta)
+  data <- data |>
+    mutate(tis_response = as.factor(tis_response)) |>
+    group_by(immet_id) |>
+    mutate(
+      tis_response_2 = tis_response[exam == "M6"][1]
+    ) |>
+    ungroup()
+  
+  # FILTR DAT
+  if (!identical(tis_response_type, "all")) {
+    
+    data <- data |>
+      filter(.data$tis_response_2 == tis_response_type)
+    
+    title_text <- paste0("tis_response (from M6): ", tis_response_type)
+    
+  } else {
+    
+    title_text <- "tis_response (from M6): all"
+    
+  }
+  
+  # RADIAL LABELS
+  lab_data <- expand.grid(
+    exam = unique(data$exam),
+    y = c(50, 100, 200, 300, 400)
+  ) |>
+    tibble::as_tibble() |>
+    mutate(
+      x = 0,
+      label = as.character(y)
+    )
+  
+  # MAPPING NAMES
+  name_map <- c(
+    "p9931_enmo" = "M010",
+    "p9861_enmo" = "M020",
+    "p9792_enmo" = "M030",
+    "p9688_enmo" = "M045",
+    "p9583_enmo" = "M060",
+    "p9375_enmo" = "M090",
+    "p9167_enmo" = "M120"
+  )
+  
+  # MAIN PIPELINE
+  data |> 
+    select(starts_with("p9"), exam) |>
+    pivot_longer(
+      cols = -exam,
+      names_to = "var_name",
+      values_to = "var_val"
+    ) |>
+    mutate(
+      var_name = dplyr::recode(var_name, !!!name_map)
+    ) |>
+    filter(!is.na(var_val)) |>
+    group_by(exam, var_name) |>
+    summarise(
+      p05 = quantile(var_val, 0.05, na.rm = TRUE),
+      p25 = quantile(var_val, 0.25, na.rm = TRUE),
+      p50 = quantile(var_val, 0.50, na.rm = TRUE),
+      p75 = quantile(var_val, 0.75, na.rm = TRUE),
+      p95 = quantile(var_val, 0.95, na.rm = TRUE),
+      p100 = max(var_val, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(
+      `0-5`    = p05,
+      `5-25`   = p25 - p05,
+      `25-50`  = p50 - p25,
+      `50-75`  = p75 - p50,
+      `75-95`  = p95 - p75,
+      `95-100` = p100 - p95
+    ) |>
+    select(exam, var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+    pivot_longer(
+      cols = -c(exam, var_name),
+      names_to = "percentil",
+      values_to = "rozpeti"
+    ) |>
+    mutate(
+      percentil = factor(
+        percentil,
+        levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+      )
+    ) |>
+    ggplot(aes(x = rec(var_name), y = rozpeti, fill = percentil)) +
+    geom_col(width = 1, linewidth = 0.1) +
+    scale_fill_brewer(palette = "Reds", direction = -1) +
+    coord_polar() +
+    geom_abline(slope = 0, intercept = 100, col = "black", lty = 2) +
+    geom_abline(slope = 0, intercept = 40, col = "black", lty = 2) +
+    geom_text(
+      data = lab_data,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE
+    ) +
+    facet_wrap(~exam) +
+    labs(title = title_text) +
+    theme_minimal() +
+    theme(
+      axis.title = element_blank(),
+      axis.text.y  = element_blank(),
+      axis.ticks.y = element_blank()
+    )
+}
+
+plot_percentile_radar_tis_m18 <- function(data, tis_response_type = "all") {
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(tibble)
+  
+  # vytvoření tis_response_2 (hodnota z M18 pro všechny exam pacienta)
+  data <- data |>
+    mutate(
+      tis_response = as.factor(tis_response)
+    ) |>
+    group_by(immet_id) |>
+    mutate(
+      tis_response_2 = tis_response[match("M18", exam)]
+    ) |>
+    ungroup()
+  
+  # FILTR DAT
+  if (!identical(tis_response_type, "all")) {
+    
+    data <- data |>
+      filter(.data$tis_response_2 == tis_response_type)
+    
+    title_text <- paste0("tis_response (from M18): ", tis_response_type)
+    
+  } else {
+    
+    title_text <- "tis_response (from M18): all"
+    
+  }
+  
+  # RADIAL LABELS
+  lab_data <- expand.grid(
+    exam = unique(data$exam),
+    y = c(50, 100, 200, 300, 400)
+  ) |>
+    tibble::as_tibble() |>
+    mutate(
+      x = 0,
+      label = as.character(y)
+    )
+  
+  # MAPPING NAMES
+  name_map <- c(
+    "p9931_enmo" = "M010",
+    "p9861_enmo" = "M020",
+    "p9792_enmo" = "M030",
+    "p9688_enmo" = "M045",
+    "p9583_enmo" = "M060",
+    "p9375_enmo" = "M090",
+    "p9167_enmo" = "M120"
+  )
+  
+  # MAIN PIPELINE
+  data |> 
+    select(starts_with("p9"), exam) |>
+    pivot_longer(
+      cols = -exam,
+      names_to = "var_name",
+      values_to = "var_val"
+    ) |>
+    mutate(
+      var_name = dplyr::recode(var_name, !!!name_map)
+    ) |>
+    filter(!is.na(var_val)) |>
+    group_by(exam, var_name) |>
+    summarise(
+      p05 = quantile(var_val, 0.05, na.rm = TRUE),
+      p25 = quantile(var_val, 0.25, na.rm = TRUE),
+      p50 = quantile(var_val, 0.50, na.rm = TRUE),
+      p75 = quantile(var_val, 0.75, na.rm = TRUE),
+      p95 = quantile(var_val, 0.95, na.rm = TRUE),
+      p100 = max(var_val, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(
+      `0-5`    = p05,
+      `5-25`   = p25 - p05,
+      `25-50`  = p50 - p25,
+      `50-75`  = p75 - p50,
+      `75-95`  = p95 - p75,
+      `95-100` = p100 - p95
+    ) |>
+    select(exam, var_name, `0-5`, `5-25`, `25-50`, `50-75`, `75-95`, `95-100`) |>
+    pivot_longer(
+      cols = -c(exam, var_name),
+      names_to = "percentil",
+      values_to = "rozpeti"
+    ) |>
+    mutate(
+      percentil = factor(
+        percentil,
+        levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
+      )
+    ) |>
+    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    geom_col(width = 1, linewidth = 0.1) +
+    scale_fill_brewer(palette = "Reds", direction = -1) +
+    coord_polar() +
+    geom_abline(slope = 0, intercept = 100, col = "black", lty = 2) +
+    geom_abline(slope = 0, intercept = 40, col = "black", lty = 2) +
+    geom_text(
+      data = lab_data,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE
+    ) +
+    facet_wrap(~exam) +
+    labs(title = title_text) +
+    theme_minimal()
+}
+
+
 # tables ----
 ## column with 0, 1, and NA ----
 is_01_col <- function(x) {

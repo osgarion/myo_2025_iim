@@ -84,6 +84,15 @@ d17_myokines <- import(paste0(folder_path, "Treatment Response_sérum,expr_pre S
 
 sel_myokines_01 <- d17_myokines[,-1] |> names()
 
+sel_tis_d18_data_01 <- c(
+  "extramuscular_global_assessment", "pt_vas", "ph_vas", "mmt8", "haq", "ast", "alt", "ck", "ld",
+  "borg", "da_muscle", "crp", "myoglobin",
+  "phase_angle", "bcm", "sf36_pcs",  "sf36_mcs", "sf36pf", "sf36rp", "sf36bp",
+  "sf36gh", "sf36vt", "sf36sf", "sf36re", "sf36mf"
+)
+
+sel_tis_d18_data_02 <- c("extramuscular_global_assessment", "pt_vas", "ph_vas", "mmt8", "haq",
+                         "ast", "alt", "ck", "ld")
 
 # *******************************************************
 # 2. data ---- 
@@ -869,7 +878,27 @@ d18_mvpa_data <-import(paste0(folder_path_2, "260302_data_geneactive_clinics.xls
   ) |>
   droplevels()
 
+# **********************************************************************
+## TIS score ----
+# **********************************************************************
+d18_ggir_tis_legend <-import("R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/GENEActiv/GGIR/merged_table_final_klinická.xlsx",
+                             which = "legenda") 
 
+d18_ggir_tis_data <- import(
+  "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/GENEActiv/GGIR/merged_table_final_klinická.xlsx",
+  which = 2
+) |>
+  rename(any_of(setNames(d18_ggir_tis_legend$names_orig,
+                         d18_ggir_tis_legend$names_new))) |>
+  mutate(
+    exam = factor(
+      exam,
+      levels = unique(exam)[
+        order(as.numeric(sub("^M", "", unique(exam))))
+      ]
+    )
+  ) |>
+  droplevels()
 
 # **********************************************************************
 ## PCA, heatmap ----
