@@ -1189,7 +1189,7 @@ plot_percentile_radar <- function(data, disease_type = "all") {
         levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
       )
     ) |>
-    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
     geom_col(width = 1, linewidth = 0.1) +
     scale_fill_brewer(palette = "Reds", direction = -1) +
     coord_polar() +
@@ -1302,7 +1302,7 @@ plot_percentile_radar_02 <- function(data, tis_response_type = "all") {
         levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
       )
     ) |>
-    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
     geom_col(width = 1, linewidth = 0.1) +
     scale_fill_brewer(palette = "Reds", direction = -1) +
     coord_polar() +
@@ -1417,7 +1417,7 @@ plot_percentile_radar_tis_m6 <- function(data, tis_response_type = "all") {
         levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
       )
     ) |>
-    ggplot(aes(x = rec(var_name), y = rozpeti, fill = percentil)) +
+    ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
     geom_col(width = 1, linewidth = 0.1) +
     scale_fill_brewer(palette = "Reds", direction = -1) +
     coord_polar() +
@@ -1534,7 +1534,7 @@ plot_percentile_radar_tis_m18 <- function(data, tis_response_type = "all") {
         levels = c("95-100", "75-95", "50-75", "25-50", "5-25", "0-5")
       )
     ) |>
-    ggplot(aes(x = rev(var_name), y = rozpeti, fill = percentil)) +
+    ggplot(aes(x = var_name, y = rozpeti, fill = percentil)) +
     geom_col(width = 1, linewidth = 0.1) +
     scale_fill_brewer(palette = "Reds", direction = -1) +
     coord_polar() +

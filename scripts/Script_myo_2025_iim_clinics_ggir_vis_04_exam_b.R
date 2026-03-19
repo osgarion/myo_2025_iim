@@ -1,0 +1,539 @@
+# ************************************************************
+# Clinical predictors of GGIR activity parameters
+# Exam-adjusted version of vis_04.
+# ************************************************************
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  dplyr,
+  purrr,
+  tibble,
+  stringr,
+  fmsb,
+  paletteer,
+  easystats,
+  rio,
+  lme4
+)
+
+scale01_vis04 <- function(x, higher_better = TRUE) {
+  x <- as.numeric(x)
+
+  if (!higher_better) {
+    x <- -x
+  }
+
+  out <- rep(NA_real_, length(x))
+  ok <- is.finite(x)
+
+  if (!any(ok)) {
+    return(out)
+  }
+
+  rng <- range(x[ok], na.rm = TRUE)
+
+  if (diff(rng) == 0) {
+    out[ok] <- 0.5
+  } else {
+    out[ok] <- (x[ok] - rng[1]) / diff(rng)
+  }
+
+  out
+}
+
+weighted_mean_na_vis04 <- function(x, w) {
+  ok <- is.finite(x) & is.finite(w)
+
+  if (!any(ok)) {
+    return(NA_real_)
+  }
+
+  sum(x[ok] * w[ok]) / sum(w[ok])
+}
+
+resolve_first_existing_vis04 <- function(data, candidates, label) {
+  hit <- intersect(candidates, names(data))
+
+  if (length(hit) == 0) {
+    stop(
+      "V datech chybi pozadovany sloupec pro `", label, "`. ",
+      "Zkouseno: ", paste(candidates, collapse = ", "), "."
+    )
+  }
+
+  hit[1]
+}
+
+fixed_parameter_colors_vis04 <- stats::setNames(
+  c(
+    as.character(paletteer::paletteer_d("ggsci::default_igv", n = 12)),
+    "#6C757D"
+  ),
+  c(
+    "mmt8",
+    "fi3",
+    "ph_vas",
+    "sf36_pcs",
+    "sf36_mcs",
+    "sf36pf",
+    "sf36rp",
+    "sf36bp",
+    "sf36gh",
+    "sf36vt",
+    "sf36sf",
+    "sf36re",
+    "sf36mf"
+  )
+)
+
+get_fixed_colors_vis04 <- function(labels) {
+  cols <- fixed_parameter_colors_vis04[labels]
+  missing_idx <- is.na(cols)
+
+  if (any(missing_idx)) {
+    cols[missing_idx] <- grDevices::hcl.colors(sum(missing_idx), palette = "Dynamic")
+  }
+
+  unname(cols)
+}
+
+prepare_ggir_clinical_data_vis04 <- function(data) {
+  immet_col <- resolve_first_existing_vis04(data, c("immet_id"), "immet_id")
+  exam_col <- resolve_first_existing_vis04(data, c("exam_order", "exam"), "exam")
+  sex_col <- resolve_first_existing_vis04(data, c("sex", "pohlavi", "gender"), "sex")
+  age_col <- resolve_first_existing_vis04(data, c("age_m0", "age"), "age_m0")
+  phvas_col <- resolve_first_existing_vis04(data, c("ph_vas", "physician_vas", "PhVAS"), "ph_vas")
+  mmt8_col <- resolve_first_existing_vis04(data, c("mmt8", "mmt8_total"), "mmt8")
+  fi3_col <- resolve_first_existing_vis04(data, c("fi3", "fi_3"), "fi3")
+
+  ggir_candidates <- c(
+    "ig_gradient_enmo",
+    "ig_intercept_enmo",
+    "acc_day_spt_wei",
+    "m5_enmo",
+    "mvpa_t100_time_min",
+    "p9931_enmo"
+  )
+  ggir_cols <- intersect(ggir_candidates, names(data))
+
+  sf36_candidates <- c(
+    "sf36_pcs", "sf36_mcs", "sf36pf", "sf36rp", "sf36bp",
+    "sf36gh", "sf36vt", "sf36sf", "sf36re", "sf36mf"
+  )
+  sf36_cols <- intersect(sf36_candidates, names(data))
+
+  data |>
+    transmute(
+      immet_id = as.character(.data[[immet_col]]),
+      exam = as.character(.data[[exam_col]]),
+      sex = as.factor(.data[[sex_col]]),
+      age_m0 = as.numeric(.data[[age_col]]),
+      mmt8 = as.numeric(.data[[mmt8_col]]),
+      fi3 = as.numeric(.data[[fi3_col]]),
+      ph_vas = as.numeric(.data[[phvas_col]]),
+      across(all_of(sf36_cols), as.numeric),
+      across(all_of(ggir_cols), as.numeric)
+    ) |>
+    mutate(
+      exam = factor(
+        exam,
+        levels = unique(exam)[order(as.numeric(sub("^M", "", unique(exam))))]
+      )
+    )
+}
+
+compute_semipartial_r2_vis04 <- function(mod, focal_term) {
+  reduced_mod <- stats::update(
+    mod,
+    formula = stats::as.formula(paste(". ~ . -", focal_term))
+  )
+
+  full_r2 <- performance::r2_nakagawa(mod, verbose = FALSE)
+  reduced_r2 <- performance::r2_nakagawa(reduced_mod, verbose = FALSE)
+
+  pmax(
+    0,
+    unname(full_r2$R2_marginal) - unname(reduced_r2$R2_marginal)
+  )
+}
+
+extract_single_model_metrics_vis04 <- function(mod, response, focal_term, ci = 0.95) {
+  std_tab <- parameters::standardize_parameters(
+    mod,
+    method = "refit",
+    ci = ci,
+    verbose = FALSE
+  ) |>
+    as.data.frame()
+
+  std_col <- grep("^Std_", names(std_tab), value = TRUE)[1]
+
+  if (is.na(std_col)) {
+    stop("Nepodarilo se najit sloupec se standardizovanym koeficientem.")
+  }
+
+  term_std <- std_tab |>
+    filter(.data$Parameter == focal_term)
+
+  if (nrow(term_std) != 1) {
+    stop(
+      "Term `", focal_term, "` nebyl nalezen jednoznacne. ",
+      "Skript podporuje jednoduche 1-df hlavni efekty."
+    )
+  }
+
+  beta_std <- term_std[[std_col]][1]
+  ci_low <- term_std$CI_low[1]
+  ci_high <- term_std$CI_high[1]
+  ci_width <- abs(ci_high - ci_low)
+
+  support_prop <- dplyr::case_when(
+    beta_std > 0 & ci_high > 0 ~ pmax(ci_high, 0) / ci_width,
+    beta_std < 0 & ci_low < 0 ~ abs(pmin(ci_low, 0)) / ci_width,
+    TRUE ~ 0.5
+  )
+
+  support_prop <- pmin(pmax(support_prop, 0), 1)
+  r2_tbl <- performance::r2_nakagawa(mod, verbose = FALSE)
+
+  tibble(
+    response = response,
+    parameter = focal_term,
+    beta_std = beta_std,
+    beta_abs = abs(beta_std),
+    ci_low = ci_low,
+    ci_high = ci_high,
+    ci_width = ci_width,
+    ci_support_prop = support_prop,
+    ci_precision_raw = (1 / ci_width) * support_prop,
+    semi_partial_r2 = compute_semipartial_r2_vis04(mod, focal_term),
+    r2_marginal = unname(r2_tbl$R2_marginal),
+    r2_conditional = unname(r2_tbl$R2_conditional),
+    aic = stats::AIC(mod)
+  )
+}
+
+score_model_metrics_vis04 <- function(raw_tbl) {
+  raw_tbl |>
+    mutate(
+      score_beta = scale01_vis04(beta_abs, higher_better = TRUE),
+      score_ci = scale01_vis04(ci_precision_raw, higher_better = TRUE),
+      score_semi_partial_r2 = scale01_vis04(semi_partial_r2, higher_better = TRUE),
+      score_r2_marginal = scale01_vis04(r2_marginal, higher_better = TRUE),
+      score_r2_conditional = scale01_vis04(r2_conditional, higher_better = TRUE),
+      score_aic = scale01_vis04(aic, higher_better = FALSE)
+    ) |>
+    rowwise() |>
+    mutate(
+      composite_score = weighted_mean_na_vis04(
+        c(
+          score_beta,
+          score_ci,
+          score_semi_partial_r2,
+          score_r2_marginal,
+          score_r2_conditional,
+          score_aic
+        ),
+        c(1, 1, 1, 1, 1, 1)
+      )
+    ) |>
+    ungroup() |>
+    arrange(desc(composite_score)) |>
+    mutate(rank = row_number())
+}
+
+format_model_table_vis04 <- function(score_tbl) {
+  score_tbl |>
+    select(
+      rank,
+      parameter,
+      response,
+      beta_std,
+      ci_low,
+      ci_high,
+      ci_width,
+      ci_support_prop,
+      semi_partial_r2,
+      r2_marginal,
+      r2_conditional,
+      aic,
+      score_beta,
+      score_ci,
+      score_semi_partial_r2,
+      score_r2_marginal,
+      score_r2_conditional,
+      score_aic,
+      composite_score
+    ) |>
+    rename(
+      Parameter = parameter,
+      Outcome = response,
+      `Std. beta` = beta_std,
+      `CI low` = ci_low,
+      `CI high` = ci_high,
+      `CI width` = ci_width,
+      `CI support proportion` = ci_support_prop,
+      `R2 - semi-partial` = semi_partial_r2,
+      `R2 marginal` = r2_marginal,
+      `R2 conditional` = r2_conditional,
+      AIC = aic,
+      `Score |beta|` = score_beta,
+      `Score CI precision` = score_ci,
+      `Score R2 - semi-partial` = score_semi_partial_r2,
+      `Score R2 marginal` = score_r2_marginal,
+      `Score R2 conditional` = score_r2_conditional,
+      `Score AIC` = score_aic,
+      `Composite score` = composite_score
+    ) |>
+    mutate(across(where(is.numeric), ~ round(.x, 3)))
+}
+
+build_fmsb_radar_vis04 <- function(score_tbl, title, subtitle) {
+  radar_metrics <- c(
+    "score_beta",
+    "score_ci",
+    "score_semi_partial_r2",
+    "score_r2_marginal",
+    "score_r2_conditional",
+    "score_aic"
+  )
+
+  pretty_labels <- c(
+    score_beta = "|beta| std.",
+    score_ci = "CI precision",
+    score_semi_partial_r2 = "R2 - semi-partial",
+    score_r2_marginal = "R2 marginal",
+    score_r2_conditional = "R2 conditional",
+    score_aic = "AIC (reverse)"
+  )
+
+  radar_df <- score_tbl |>
+    select(parameter, all_of(radar_metrics)) |>
+    as.data.frame()
+
+  rownames(radar_df) <- radar_df$parameter
+  radar_df$parameter <- NULL
+  radar_df[] <- lapply(radar_df, as.numeric)
+  names(radar_df) <- pretty_labels[radar_metrics]
+
+  radar_df <- rbind(
+    rep(1, ncol(radar_df)),
+    rep(0, ncol(radar_df)),
+    radar_df
+  ) |>
+    as.data.frame()
+
+  rownames(radar_df)[1:2] <- c("max", "min")
+
+  structure(
+    list(
+      data = radar_df,
+      axis_labels = pretty_labels[radar_metrics],
+      legend_labels = score_tbl$parameter,
+      title = title,
+      subtitle = subtitle
+    ),
+    class = "fmsb_radar_vis04"
+  )
+}
+
+print.fmsb_radar_vis04 <- function(x, ...) {
+  title_cex <- 60 / 12
+  subtitle_cex <- 50 / 12
+  axis_cex <- 32 / 12
+  y_axis_cex <- 36 / 12
+  legend_cex <- 28 / 12
+  point_cex <- 36 / 12
+
+  cols <- get_fixed_colors_vis04(x$legend_labels)
+  fill_cols <- grDevices::adjustcolor(cols, alpha.f = 0.18)
+
+  op <- graphics::par(
+    mar = c(5, 7, 8, 7),
+    plt = c(0.08, 0.50, 0.12, 0.80),
+    xpd = TRUE,
+    font = 2
+  )
+  on.exit(graphics::par(op), add = TRUE)
+
+  fmsb::radarchart(
+    x$data,
+    vlabels = x$axis_labels,
+    axistype = 1,
+    seg = 4,
+    pcol = cols,
+    pfcol = fill_cols,
+    plwd = 2,
+    plty = 1,
+    cglcol = "grey85",
+    cglty = 1,
+    cglwd = 1,
+    axislabcol = "grey50",
+    vlcex = axis_cex,
+    calcex = y_axis_cex
+  )
+
+  graphics::title(main = x$title, cex.main = title_cex, font.main = 2, line = 3)
+  graphics::mtext(x$subtitle, side = 3, line = 1.2, cex = subtitle_cex, font = 3)
+  graphics::legend(
+    "topright",
+    inset = c(-0.34, 0.02),
+    legend = x$legend_labels,
+    bty = "n",
+    pch = 16,
+    col = cols,
+    pt.cex = point_cex,
+    cex = legend_cex,
+    text.font = 2
+  )
+
+  invisible(x)
+}
+
+compare_clinical_predictors_for_ggir_vis04_exam <- function(data, response, clinical_parameters, ci = 0.95) {
+  models <- map(clinical_parameters, function(parameter_name) {
+    model_data <- data |>
+      select(immet_id, exam, age_m0, sex, all_of(response), all_of(parameter_name)) |>
+      na.omit()
+
+    fml <- stats::as.formula(
+      paste0(response, " ~ ", parameter_name, " + exam + age_m0 + sex + (1 | immet_id)")
+    )
+
+    lme4::lmer(fml, data = model_data, REML = FALSE)
+  })
+
+  names(models) <- clinical_parameters
+
+  raw_tbl <- imap_dfr(models, function(mod, parameter_name) {
+    extract_single_model_metrics_vis04(
+      mod = mod,
+      response = response,
+      focal_term = parameter_name,
+      ci = ci
+    )
+  })
+
+  score_tbl <- score_model_metrics_vis04(raw_tbl)
+
+  list(
+    models = models,
+    raw_metrics = raw_tbl,
+    composite_table = score_tbl,
+    composite_table_export = format_model_table_vis04(score_tbl),
+    radar_plot = build_fmsb_radar_vis04(
+      score_tbl = score_tbl,
+      title = paste0("Clinical predictors of ", response),
+      subtitle = paste0(response, " ~ tested variable + exam + age_m0 + sex + (1 | immet_id)")
+    )
+  )
+}
+
+export_result_vis04 <- function(result, table_file, plot_file, width = 14, height = 8, dpi = 320) {
+  dir.create(dirname(table_file), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(plot_file), recursive = TRUE, showWarnings = FALSE)
+
+  if (file.exists(table_file)) {
+    unlink(table_file, force = TRUE)
+  }
+
+  if (file.exists(plot_file)) {
+    unlink(plot_file, force = TRUE)
+  }
+
+  rio::export(
+    list(
+      composite_table = result$composite_table_export,
+      raw_metrics = result$raw_metrics |>
+        mutate(across(where(is.numeric), ~ round(.x, 4)))
+    ),
+    table_file
+  )
+
+  grDevices::png(
+    filename = plot_file,
+    width = width * dpi,
+    height = height * dpi,
+    res = dpi,
+    bg = "white",
+    type = "cairo"
+  )
+  print(result$radar_plot)
+  grDevices::dev.off()
+
+  invisible(
+    list(
+      table_file = normalizePath(table_file, winslash = "/", mustWork = FALSE),
+      plot_file = normalizePath(plot_file, winslash = "/", mustWork = FALSE)
+    )
+  )
+}
+
+sanitize_name_vis04 <- function(x) {
+  stringr::str_replace_all(x, "[^A-Za-z0-9]+", "_")
+}
+
+run_ggir_clinical_workflow_vis04_exam_b <- function(
+    data = d18_ggir_data,
+    ggir_outcomes = c(
+      "ig_gradient_enmo",
+      "ig_intercept_enmo",
+      "acc_day_spt_wei",
+      "m5_enmo",
+      "mvpa_t100_time_min",
+      "p9931_enmo"
+    ),
+    clinical_parameters = c(
+      "mmt8", "fi3", "ph_vas",
+      "sf36_pcs", "sf36_mcs", "sf36pf", "sf36rp", "sf36bp",
+      "sf36gh", "sf36vt", "sf36sf", "sf36re", "sf36mf"
+    ),
+    export_results = TRUE,
+    suffix = "01"
+) {
+  prepared_data <- prepare_ggir_clinical_data_vis04(data)
+  ggir_available <- intersect(ggir_outcomes, names(prepared_data))
+  clinical_available <- intersect(clinical_parameters, names(prepared_data))
+
+  dir.create(file.path("output", "exam_incl", "fi3", "ggir", "tables"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path("output", "exam_incl", "fi3", "ggir", "figures"), recursive = TRUE, showWarnings = FALSE)
+
+  results <- map(ggir_available, function(outcome_name) {
+    result <- compare_clinical_predictors_for_ggir_vis04_exam(
+      data = prepared_data,
+      response = outcome_name,
+      clinical_parameters = clinical_available
+    )
+
+    export_paths <- NULL
+
+    if (isTRUE(export_results)) {
+      prefix <- paste0(format(Sys.Date(), "%y%m%d"), "_", sanitize_name_vis04(outcome_name), "_ggir")
+      export_paths <- export_result_vis04(
+        result = result,
+        table_file = file.path("output", "exam_incl", "fi3", "ggir", "tables", paste0(prefix, "_exam_b_", suffix, ".xlsx")),
+        plot_file = file.path("output", "exam_incl", "fi3", "ggir", "figures", paste0(prefix, "_exam_b_", suffix, ".png"))
+      )
+    }
+
+    list(
+      result = result,
+      export_paths = export_paths
+    )
+  })
+
+  names(results) <- ggir_available
+  results
+}
+
+if (exists("d18_ggir_data")) {
+  ggir_vis04_exam_b_results <- run_ggir_clinical_workflow_vis04_exam_b(
+    data = d18_ggir_data,
+    export_results = isTRUE(getOption("myo.ggir.vis04.exam_b.export", TRUE))
+  )
+
+  message("vis04_exam_b exported to: ", normalizePath(file.path("output", "exam_incl", "fi3", "ggir"), winslash = "/", mustWork = FALSE))
+}
