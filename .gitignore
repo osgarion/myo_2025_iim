@@ -84,3 +84,4 @@ data/processed/
 !tables/final/*.tsv
 !tables/final/*.xlsx
 !tables/final/*.xls
+!data/processed/d_objects_all.RData
