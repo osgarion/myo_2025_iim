@@ -58,7 +58,7 @@ options(knitr.kable.NA = '',     # empty space in cells with NAs in kable
 
 
 ## Number of cores ----
-ncores_default_01 <- max(1L, min(4L, future::availableCores() - 1L))
+ncores_default_01 <- max(future::availableCores() - 1L)
 ncores <- as.integer(getOption("myo_ncores", ncores_default_01))
 if (!is.finite(ncores) || is.na(ncores)) ncores <- ncores_default_01
 ncores <- max(1L, ncores)

@@ -32,6 +32,7 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse, purrr, conflicted, renv)
 
 ## Functions and libraries uploading
+options(myo_pacman_update = FALSE, myo_pacman_install = FALSE)
 list.files("scripts/functions/", pattern="*.*", full.names=TRUE) |> map(~source(.))
 renv::status()
 

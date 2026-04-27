@@ -27,17 +27,22 @@ model_min_2 <- function(data, filter_na = TRUE) {
   lower_covar <- model_parameters(mod1$fit)$CI_low[[3]]
   upper_covar <- model_parameters(mod1$fit)$CI_high[[3]]
   p_val_covar <- model_parameters(mod1$fit)$p[[3]]
-  
+  std_beta_covar <- tryCatch(
+    parameters::standardize_parameters(mod1$fit, method = "refit")$Std_Coefficient[[3]],
+    error = function(e) parameters::standardize_parameters(mod1$fit, method = "posthoc")$Std_Coefficient[[3]]
+  )
+
   return(list(table = tibble(omega_sq_p = omega,
                              r2_mod = r2_mod,
                              beta_covar = beta_covar,
+                             std_beta_covar = std_beta_covar,
                              lower_covar = lower_covar,
                              upper_covar = upper_covar,
                              p_val_covar = p_val_covar),
               model = mod1)
   )
-  
-  
+
+
 }
 
 model_covar_2 <- function(data, covar, filter_na = TRUE) {
@@ -72,61 +77,61 @@ model_covar_2 <- function(data, covar, filter_na = TRUE) {
   lower_covar <- model_parameters(mod1$fit)$CI_low[[3]]
   upper_covar <- model_parameters(mod1$fit)$CI_high[[3]]
   p_val_covar <- model_parameters(mod1$fit)$p[[3]]
-  
+  std_beta_covar <- tryCatch(
+    parameters::standardize_parameters(mod1$fit, method = "refit")$Std_Coefficient[[3]],
+    error = function(e) parameters::standardize_parameters(mod1$fit, method = "posthoc")$Std_Coefficient[[3]]
+  )
+
   return(list(table = tibble(omega_sq_p = omega,
                              r2_mod = r2_mod,
                              beta_covar = beta_covar,
+                             std_beta_covar = std_beta_covar,
                              lower_covar = lower_covar,
                              upper_covar = upper_covar,
                              p_val_covar = p_val_covar),
               model = mod1)
   )
-  
+
 }
 
 ## only covariates ----
 ### models ----
+options(renv.config.auto.snapshot = FALSE)
 tic()
 Sys.time()
 
-cluster <- multidplyr::new_cluster(ncores)
-multidplyr::cluster_library(cluster, c("dplyr","purrr","stringr","tibble", 
-                                       "data.table", "tidyverse", "tidymodels",
-                                       "multilevelmod","lme4","lmerTest",
-                                       "broom.mixed", "easystats"))
-multidplyr::cluster_copy(cluster, c("model_covar_2", "model_min_2", "model_comp_int"))
+future::plan(multisession, workers = ncores)
 
 res_mixMod_covar_02 <- d04_sel2 |>
-  filter(poradie_vysetrenia %in% c("M0", "M6")) |> 
+  filter(poradie_vysetrenia %in% c("M0", "M6")) |>
   select(any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
          any_of(var_indep_01),
-         vek, denna_davka_gk_mg_kg_bw, kreatinin_umol_l, bcm, pohlavi, 
-         podtyp_nemoci_zjednoduseny, jo_1, anti_hmgcr, projekt_id, poradie_vysetrenia) |> 
+         vek, denna_davka_gk_mg_kg_bw, kreatinin_umol_l, bcm, pohlavi,
+         podtyp_nemoci_zjednoduseny, jo_1, anti_hmgcr, projekt_id, poradie_vysetrenia) |>
   mutate(across(.cols = c("ast", "alt", "ck", "crp", "haq", "ld", "mitax", "myoact", "myoglobin"), function(x) log(x+1)),
          jo_1 = as.factor(jo_1),
-         anti_hmgcr = as.factor(anti_hmgcr)) |> 
-  # mice::mice("pmm", m = 20, 
-  #      maxit = 15, 
-  #      printFlag = F) |> complete() |> 
+         anti_hmgcr = as.factor(anti_hmgcr)) |>
+  # mice::mice("pmm", m = 20,
+  #      maxit = 15,
+  #      printFlag = F) |> complete() |>
   pivot_longer(cols = any_of(var_dep_01 |>  str_subset("odpoved_na_terapii_m0_vs_m6|kreatinin_umol_l", negate = TRUE)),
                names_to = "var_dep_name",
-               values_to = "var_dep_value") |> 
+               values_to = "var_dep_value") |>
   pivot_longer(cols = any_of(var_indep_01),
                names_to = "var_indep_name",
-               values_to = "var_indep_value") |> 
-  group_by(var_dep_name, var_indep_name) |> 
-  multidplyr::partition(cluster) |> 
-  do(
-    data = data.table(.),
-    mod_without = model_min_2(., filter_na = FALSE),
-    mod_covar_gk = model_covar_2(., "denna_davka_gk_mg_kg_bw", filter_na = FALSE),
-    mod_covar_age = model_covar_2(., "vek", filter_na = FALSE),
-    mod_covar_bcm = model_covar_2(., "bcm", filter_na = FALSE),
-    mod_covar_creatine = model_covar_2(., "kreatinin_umol_l", filter_na = FALSE)
-  ) |> 
-  collect()
+               values_to = "var_indep_value") |>
+  group_by(var_dep_name, var_indep_name) |>
+  nest() |>
+  mutate(
+    mod_without       = furrr::future_map(data, ~model_min_2(.x,                              filter_na = FALSE), .options = furrr_options(seed = TRUE)),
+    mod_covar_gk      = furrr::future_map(data, ~model_covar_2(.x, "denna_davka_gk_mg_kg_bw", filter_na = FALSE), .options = furrr_options(seed = TRUE)),
+    mod_covar_age     = furrr::future_map(data, ~model_covar_2(.x, "vek",                     filter_na = FALSE), .options = furrr_options(seed = TRUE)),
+    mod_covar_bcm     = furrr::future_map(data, ~model_covar_2(.x, "bcm",                     filter_na = FALSE), .options = furrr_options(seed = TRUE)),
+    mod_covar_creatine = furrr::future_map(data, ~model_covar_2(.x, "kreatinin_umol_l",        filter_na = FALSE), .options = furrr_options(seed = TRUE))
+  ) |>
+  ungroup()
 
-walk(cluster, ~ .x$kill()); gc()
+future::plan(sequential); gc()
 
 toc()
 beep(4)
@@ -143,6 +148,7 @@ res_mixMod_covar_02_tab <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "beta_covar",
+                        "std_beta_covar",
                         "lower_covar",
                         "upper_covar",
                         "p_val_covar"))
@@ -157,6 +163,7 @@ res_mixMod_covar_02_tab_gk <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "beta_covar",
+                        "std_beta_covar",
                         "lower_covar",
                         "upper_covar",
                         "p_val_covar"))
@@ -171,6 +178,7 @@ res_mixMod_covar_02_tab_age <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "beta_covar",
+                        "std_beta_covar",
                         "lower_covar",
                         "upper_covar",
                         "p_val_covar"))
@@ -185,6 +193,7 @@ res_mixMod_covar_02_tab_creatine <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "beta_covar",
+                        "std_beta_covar",
                         "lower_covar",
                         "upper_covar",
                         "p_val_covar"))
@@ -199,6 +208,7 @@ res_mixMod_covar_02_tab_bcm <- res_mixMod_covar_02 |>
               .cols = c("omega_sq_p",
                         "r2_mod",
                         "beta_covar",
+                        "std_beta_covar",
                         "lower_covar",
                         "upper_covar",
                         "p_val_covar"))
