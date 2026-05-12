@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//r/MYOZITIDY_V�ZKUM/_IMMET-GRANT/IMMET �tatistika/Output/251017/**)",
+      "Read(//r/MYOZITIDY_V�ZKUM/_IMMET-GRANT/IMMET �tatistika/Data/Raw/**)",
+      "Bash(ls \"R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251113/\" 2>/dev/null | head -30; echo \"---\"; ls \"R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251120/\" 2>/dev/null | head -30)",
+      "Read(//r/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251113/**)",
+      "Read(//r/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/251120/**)"
+    ]
+  }
+}

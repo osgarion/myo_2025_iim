@@ -1,0 +1,283 @@
+---
+title: "IIM — Myokiny vs. klinické proměnné (revidovaný soubor, M0 vs M6)"
+author: "Jiří Baloun"
+date: "Compiled on: **2026-05-07**  <br> Last updated **`r format(Sys.time(), '%Y-%m-%d')`**"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{=html}
+<style type="text/css">
+.title {
+  text-align: center;
+}
+.author {
+  font-size: 30px;
+  text-align: center;
+  font-style: italic;
+  font-weight: 300;
+}
+.date {
+  font-weight: 300;
+}
+h1, h2, h3, h4 {
+    font-weight: 600;
+    margin-top: 2em;
+}
+body {text-align: justify}
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    border-left: 5px solid #eee;
+}
+p {
+  text-indent: 2rem;
+}
+table {
+    width:100%;
+}
+.main-container {
+  max-width: 100% !important;
+  margin: auto;
+}
+img{
+    height: 100%;
+    width: 100%;
+    object-fit: contain;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo      = FALSE,
+  message   = FALSE,
+  warning   = FALSE,
+  fig.align = "center",
+  knitr.kable.NA = ""
+)
+options(knitr.kable.NA = "", scipen = 999)
+knitr::opts_knit$set(root.dir = "f:/Analysis/Vernerová Lucia/myo_2025_iim")
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(update = FALSE,
+  tidyverse, purrr, conflicted, renv,
+  rio, janitor, ggpubr,
+  gtsummary, gt, patchwork,
+  knitr, kableExtra, sessioninfo
+)
+
+conflicted::conflicts_prefer(
+  dplyr::filter,
+  dplyr::mutate,
+  dplyr::rename,
+  dplyr::summarize,
+  dplyr::summarise,
+  dplyr::select,
+  purrr::map
+)
+
+rmd_dir   <- normalizePath(dirname(knitr::current_input(dir = TRUE)), winslash = "/")
+proj_root <- normalizePath(file.path(rmd_dir, ".."), winslash = "/")
+
+path_figures <- file.path(proj_root, "output/figures")
+path_tables  <- file.path(proj_root, "output/tables")
+
+# Load pre-computed objects from Script_myo_2025_iim_02.R
+rdata_files <- list.files(file.path(proj_root, "reports"),
+                          pattern = "_covariates_revize_01\\.RData$",
+                          full.names = TRUE)
+if (length(rdata_files) > 0) {
+  load(tail(rdata_files, 1))
+} else {
+  stop("RData not found — run Script_myo_2025_iim_02.R first.")
+}
+```
+
+# Kontext
+
+Kolegyňa Lucia Vernerová upravila vstupní data: pacienti s příliš dlouhou
+dobou nemoci nebo léčby byli ze souboru vyjmuti. Revidovaná data jsou
+v listech s příponou `*_revize` ve zdrojových Excel souborech.
+
+Tato analýza replikuje tabulku kovariantních lmer modelů (M0 vs M6) z
+původního datasetu — nyní na revidovaném souboru — a zobrazuje post-hoc
+vizualizace pro signifikantní výsledky (p < 0,06) stratifikované dle
+pohlaví, poddiagnózy, anti-Jo1 a anti-HMGCR.
+
+---
+
+# Výsledky — Kovariantní modely
+
+## Hlavní tabulka
+
+Tabulka obsahuje výsledky lmer modelů pro všechny kombinace závislých
+proměnných (`var_dep`) a nezávislých proměnných (`var_indep`: mstn, fst,
+fstl3, akta). Pro každou kombinaci je uveden model bez konfounderu a
+modely s každým ze čtyř kovariantů (věk, GK dávka, BCM, kreatinin).
+
+**Sloupce:** beta, standardizovaná beta (metoda `refit`, fallback
+`posthoc`), 95% CI, p-hodnota, partial omega², podmíněné R².
+
+```{r table-main}
+res_covar_02_rev_tab |>
+  select(var_dep_name, var_indep_name,
+         beta_covar_without, std_beta_covar_without, p_val_covar_without,
+         beta_covar_age,     std_beta_covar_age,     p_val_covar_age,
+         beta_covar_gk,      std_beta_covar_gk,      p_val_covar_gk,
+         beta_covar_bcm,     std_beta_covar_bcm,     p_val_covar_bcm,
+         beta_covar_creatine, std_beta_covar_creatine, p_val_covar_creatine) |>
+  mutate(across(where(is.numeric), ~round(.x, 3))) |>
+  kable(col.names = c(
+    "Závislá", "Nezávislá",
+    "β", "std β", "p",
+    "β", "std β", "p",
+    "β", "std β", "p",
+    "β", "std β", "p",
+    "β", "std β", "p"
+  )) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                font_size = 11, full_width = TRUE) |>
+  add_header_above(c(" " = 2,
+                     "Bez konfounderu" = 3,
+                     "Věk" = 3,
+                     "GK dávka" = 3,
+                     "BCM" = 3,
+                     "Kreatinin" = 3))
+```
+
+---
+
+# Post-hoc vizualizace
+
+Zobrazeny jsou pouze výsledky pro kovariantní modely se signifikantním
+výsledkem (p < 0,06). Pro každý kovariant (věk, GK dávka, BCM, kreatinin)
+jsou data stratifikována dle pohlaví, poddiagnózy, anti-Jo1 a anti-HMGCR.
+
+## Věk
+
+### Pohlaví
+
+```{r fig-age-sex, results='asis', fig.height=6, fig.width=14}
+walk(sub_age$fig_sex, print)
+```
+
+### Poddiagnóza
+
+```{r fig-age-sub, results='asis', fig.height=6, fig.width=14}
+walk(sub_age$fig_sub, print)
+```
+
+### Anti-Jo1
+
+```{r fig-age-jo, results='asis', fig.height=6, fig.width=14}
+walk(sub_age$fig_jo, print)
+```
+
+### Anti-HMGCR
+
+```{r fig-age-hmgcr, results='asis', fig.height=6, fig.width=14}
+walk(sub_age$fig_hmgcr, print)
+```
+
+## GK dávka
+
+### Pohlaví
+
+```{r fig-gk-sex, results='asis', fig.height=6, fig.width=14}
+walk(sub_gk$fig_sex, print)
+```
+
+### Poddiagnóza
+
+```{r fig-gk-sub, results='asis', fig.height=6, fig.width=14}
+walk(sub_gk$fig_sub, print)
+```
+
+### Anti-Jo1
+
+```{r fig-gk-jo, results='asis', fig.height=6, fig.width=14}
+walk(sub_gk$fig_jo, print)
+```
+
+### Anti-HMGCR
+
+```{r fig-gk-hmgcr, results='asis', fig.height=6, fig.width=14}
+walk(sub_gk$fig_hmgcr, print)
+```
+
+## BCM
+
+### Pohlaví
+
+```{r fig-bcm-sex, results='asis', fig.height=6, fig.width=14}
+walk(sub_bcm$fig_sex, print)
+```
+
+### Poddiagnóza
+
+```{r fig-bcm-sub, results='asis', fig.height=6, fig.width=14}
+walk(sub_bcm$fig_sub, print)
+```
+
+### Anti-Jo1
+
+```{r fig-bcm-jo, results='asis', fig.height=6, fig.width=14}
+walk(sub_bcm$fig_jo, print)
+```
+
+### Anti-HMGCR
+
+```{r fig-bcm-hmgcr, results='asis', fig.height=6, fig.width=14}
+walk(sub_bcm$fig_hmgcr, print)
+```
+
+## Kreatinin
+
+### Pohlaví
+
+```{r fig-creatine-sex, results='asis', fig.height=6, fig.width=14}
+walk(sub_creatine$fig_sex, print)
+```
+
+### Poddiagnóza
+
+```{r fig-creatine-sub, results='asis', fig.height=6, fig.width=14}
+walk(sub_creatine$fig_sub, print)
+```
+
+### Anti-Jo1
+
+```{r fig-creatine-jo, results='asis', fig.height=6, fig.width=14}
+walk(sub_creatine$fig_jo, print)
+```
+
+### Anti-HMGCR
+
+```{r fig-creatine-hmgcr, results='asis', fig.height=6, fig.width=14}
+walk(sub_creatine$fig_hmgcr, print)
+```
+
+---
+
+# Session info
+
+```{r session-info, include=TRUE, echo=FALSE, collapse=TRUE}
+sessioninfo::session_info()
+```

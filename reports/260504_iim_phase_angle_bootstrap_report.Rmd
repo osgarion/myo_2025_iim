@@ -1,0 +1,608 @@
+---
+title: "GENEActiv and Phase Angle in IIM — Bootstrap Mixed-Model Report"
+author: "Veronika Balounová"
+date: "Compiled on: **2026-05-04**  <br> Last updated **`r format(Sys.time(), '%Y-%m-%d')`**"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{=html}
+<style type="text/css">
+.title {
+  text-align: center;
+}
+.author {
+  font-size: 30px;
+  text-align: center;
+  font-style: italic;
+  font-weight: 300;
+}
+.date {
+  font-weight: 300;
+}
+h1, h2, h3, h4 {
+    font-weight: 600;
+    margin-top: 2em;
+}
+body {text-align: justify}
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    border-left: 5px solid #eee;
+}
+p {
+  text-indent: 2rem;
+}
+table {
+    width:100%;
+}
+.main-container {
+  max-width: 100% !important;
+  margin: auto;
+}
+img{
+    height: 100%;
+    width: 100%;
+    object-fit: contain;
+}
+.boxBorder {
+     border: 2px solid #990066;
+     padding: 10px;
+     outline: #990066 solid 5px;
+     outline-offset: 5px;
+   }
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  knitr.kable.NA = ""
+)
+options(knitr.kable.NA = "", scipen = 999)
+
+if (!require("pacman")) install.packages("pacman")
+
+pacman::p_load(update = FALSE,
+  tidyverse, readxl, janitor, gt, knitr, kableExtra,
+  lme4, parameters, performance, datawizard, sessioninfo
+)
+
+conflicted::conflicts_prefer(
+  dplyr::filter,
+  dplyr::mutate,
+  dplyr::rename,
+  dplyr::summarize,
+  dplyr::summarise,
+  dplyr::select,
+  dplyr::lag,
+  purrr::map
+)
+
+rmd_dir <- normalizePath(dirname(knitr::current_input(dir = TRUE)), winslash = "/")
+
+path_boot <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/GENEActivII/lmer_custom_multivariable_phase_angle/residualizace/bootstrap"
+path_input <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/GENEActivII/rCCA_rozdelene_sady_parametru/ggir_vs_myokiny_bez_imputace/20263003.xlsx"
+
+file_xlsx <- file.path(path_boot, "bootstrap_lmer_report.xlsx")
+file_summary <- file.path(path_boot, "bootstrap_summary.csv")
+file_status <- file.path(path_boot, "bootstrap_status.csv")
+file_all <- file.path(path_boot, "bootstrap_all_parameters.csv")
+file_full_model <- file.path(path_boot, "full_sample_model_raw.rds")
+
+fmt <- function(x, digits = 3) {
+  ifelse(is.na(x), NA_character_, formatC(x, format = "f", digits = digits))
+}
+
+fmt_p <- function(x) {
+  dplyr::case_when(
+    is.na(x) ~ NA_character_,
+    x < 0.001 ~ "<0.001",
+    TRUE ~ formatC(x, format = "f", digits = 3)
+  )
+}
+
+parameter_labels <- c(
+  "(Intercept)" = "Intercept (baseline M0, female reference)",
+  "examM3" = "M3 vs M0",
+  "examM6" = "M6 vs M0",
+  "examM18" = "M18 vs M0",
+  "examM30" = "M30 vs M0",
+  "examM48" = "M48 vs M0",
+  "age" = "Age",
+  "age_z" = "Age, z-score",
+  "sexMale" = "Male sex vs female",
+  "bcm_between" = "Between-patient BCM",
+  "bcm_between_z" = "Between-patient BCM, z-score",
+  "bmi_between" = "Between-patient BMI",
+  "bmi_between_z" = "Between-patient BMI, z-score"
+)
+
+summary_tbl <- readr::read_csv(file_summary, show_col_types = FALSE) |>
+  mutate(
+    parameter_label = coalesce(parameter_labels[Parameter], Parameter),
+    ci = paste0(fmt(ci_low_percentile), " to ", fmt(ci_high_percentile)),
+    estimate = fmt(estimate_median),
+    boot_se_fmt = fmt(boot_se),
+    p_fmt = fmt_p(p_boot_two_sided),
+    direction = case_when(
+      ci_low_percentile > 0 ~ "positive",
+      ci_high_percentile < 0 ~ "negative",
+      TRUE ~ "uncertain"
+    )
+  )
+
+status_tbl <- readr::read_csv(file_status, show_col_types = FALSE)
+
+full_params <- readxl::read_excel(file_xlsx, sheet = "full_sample_parameters_raw") |>
+  mutate(
+    parameter_label = coalesce(parameter_labels[Parameter], Parameter),
+    ci = paste0(fmt(CI_low), " to ", fmt(CI_high)),
+    p_fmt = fmt_p(p)
+  )
+
+full_collin <- readxl::read_excel(file_xlsx, sheet = "full_sample_collinearity_raw")
+
+input_data <- readxl::read_excel(path_input, sheet = "sheet1") |>
+  janitor::clean_names() |>
+  rename(exam = any_of("m")) |>
+  mutate(
+    exam = factor(exam, levels = c(0, 3, 6, 18, 30, 48),
+                  labels = c("M0", "M3", "M6", "M18", "M30", "M48")),
+    sex_label = factor(sex, levels = c(0, 1), labels = c("Female", "Male"))
+  )
+
+eligible_data <- input_data |>
+  filter(!is.na(filename_2)) |>
+  datawizard::demean(select = c("bcm", "bmi"), by = "filename_2") |>
+  filter(
+    !is.na(ig_gradient_enmo),
+    !is.na(exam),
+    !is.na(age),
+    !is.na(sex),
+    !is.na(bcm_between),
+    !is.na(bmi_between)
+  )
+```
+
+# Aim
+
+This report summarizes bootstrap mixed-model results from the
+`lmer_srovnani_2_promennych_interakce_bootstrap_bmi.R` analysis. The
+clinical question is whether longitudinal wrist-accelerometry output
+(`ig_gradient_enmo`) changes over time in patients with idiopathic
+inflammatory myopathy (IIM), and whether the signal is independently
+associated with age, sex, between-patient body cell mass (BCM), and
+between-patient body mass index (BMI).
+
+The report is written for clinical interpretation. The statistical model
+is treated as a robustness analysis rather than as a causal model.
+
+# Abbreviations
+
+**BCM**: body cell mass. **BMI**: body mass index. **BIA**:
+bioelectrical impedance analysis. **CI**: confidence interval. **CK**:
+creatine kinase. **ENMO**: Euclidean Norm Minus One, an acceleration
+metric commonly used for raw accelerometer data. **IIM**: idiopathic
+inflammatory myopathy. **LMM**: linear mixed model. **M0, M3, M6, M18,
+M30, M48**: study visits at baseline and months 3, 6, 18, 30, and 48.
+**PhA**: phase angle. **SE**: standard error. **VIF**: variance
+inflation factor.
+
+# Data Overview
+
+The source dataset contains `r nrow(input_data)` observations from
+`r dplyr::n_distinct(input_data$filename_2)` patients. The model-eligible
+dataset, after deriving between-patient BCM and BMI and removing records
+with missing model variables, contains `r nrow(eligible_data)`
+observations from `r dplyr::n_distinct(eligible_data$filename_2)`
+patients.
+
+```{r data_overview}
+tibble::tibble(
+  metric = c(
+    "Rows in source data",
+    "Unique patients in source data",
+    "Rows eligible for model",
+    "Unique patients eligible for model"
+  ),
+  value = c(
+    nrow(input_data),
+    dplyr::n_distinct(input_data$filename_2),
+    nrow(eligible_data),
+    dplyr::n_distinct(eligible_data$filename_2)
+  )
+) |>
+  gt::gt() |>
+  gt::tab_header(title = "Data availability")
+```
+
+```{r exam_distribution}
+input_data |>
+  count(exam, name = "n_source") |>
+  left_join(
+    eligible_data |> count(exam, name = "n_model_eligible"),
+    by = "exam"
+  ) |>
+  mutate(n_model_eligible = replace_na(n_model_eligible, 0L)) |>
+  gt::gt() |>
+  gt::tab_header(title = "Visit distribution")
+```
+
+```{r descriptive_table}
+input_data |>
+  summarise(
+    age_median = median(age, na.rm = TRUE),
+    age_iqr = IQR(age, na.rm = TRUE),
+    bmi_median = median(bmi, na.rm = TRUE),
+    bmi_iqr = IQR(bmi, na.rm = TRUE),
+    bcm_median = median(bcm, na.rm = TRUE),
+    bcm_iqr = IQR(bcm, na.rm = TRUE),
+    phase_angle_median = median(phase_angle, na.rm = TRUE),
+    phase_angle_iqr = IQR(phase_angle, na.rm = TRUE),
+    ig_gradient_enmo_median = median(ig_gradient_enmo, na.rm = TRUE),
+    ig_gradient_enmo_iqr = IQR(ig_gradient_enmo, na.rm = TRUE)
+  ) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+  gt::gt() |>
+  gt::fmt_number(columns = value, decimals = 2) |>
+  gt::tab_header(title = "Continuous-variable summary in source data")
+```
+
+The raw dataset is longitudinal and unbalanced. Most records are at M0,
+M3, and M6; late follow-up is sparse, especially M48. This matters for
+interpretation: the M48 coefficient is directionally strong, but it is
+estimated from fewer available observations than the earlier visits.
+
+# Methods
+
+The fitted full-sample model was:
+
+```{r model_formula}
+if (file.exists(file_full_model)) {
+  full_model <- readRDS(file_full_model)
+  cat(deparse(stats::formula(full_model)))
+}
+```
+
+The model uses `ig_gradient_enmo` as the dependent variable. The fixed
+effects are visit, age, sex, between-patient BCM, and between-patient
+BMI. A random intercept is included for `boot_id`, which represents the
+patient or bootstrap cluster. Models were fitted by maximum likelihood
+with `lme4::lmer` (`REML = FALSE`), using the `bobyqa` optimizer.
+
+For bootstrap inference, 5000 bootstrap samples were generated. Each
+cycle sampled 50 patients with replacement. Within each bootstrap cycle,
+the preprocessing was repeated, including derivation of between-patient
+components for BCM and BMI using group-mean decomposition. Both raw and
+standardized models were fitted. In the standardized model, the response
+and continuous predictors were z-standardized within the bootstrap
+dataset; therefore, standardized coefficients are comparable by effect
+size.
+
+The bootstrap summary reports the mean and median coefficient across
+successful bootstrap fits, bootstrap SE, percentile 95% CI, two-sided
+bootstrap p value, and the proportion of bootstrap coefficients above or
+below zero.
+
+# Model Stability
+
+```{r bootstrap_status}
+status_tbl |>
+  gt::gt() |>
+  gt::tab_header(title = "Bootstrap convergence status") |>
+  gt::fmt_number(columns = where(is.numeric), decimals = 0)
+```
+
+All 5000 bootstrap cycles converged for both raw and standardized
+models. No singular fits were detected. The median bootstrap model used
+171 observations and 171 bootstrap clusters. This is a technically
+important result: the main findings are not driven by frequent model
+failure or unstable random-effect estimation.
+
+# Full-Sample Model
+
+```{r full_sample_parameters}
+full_params |>
+  select(
+    Parameter = parameter_label,
+    Coefficient,
+    SE,
+    `95% CI` = ci,
+    t,
+    df_error,
+    p = p_fmt
+  ) |>
+  gt::gt() |>
+  gt::fmt_number(columns = c(Coefficient, SE, t), decimals = 3) |>
+  gt::fmt_number(columns = df_error, decimals = 0) |>
+  gt::tab_header(title = "Full-sample fixed effects: raw model")
+```
+
+The full-sample model shows a consistent increase in `ig_gradient_enmo`
+at all post-baseline visits. Compared with M0, coefficients are positive
+at M3, M6, M18, M30, and M48. Age and BMI show negative associations,
+whereas male sex and BCM do not show clear independent effects in the
+full-sample model.
+
+```{r collinearity}
+full_collin |>
+  gt::gt() |>
+  gt::fmt_number(columns = where(is.numeric), decimals = 2) |>
+  gt::tab_header(title = "Collinearity diagnostics for the full-sample model")
+```
+
+VIF values are below conventional high-collinearity thresholds. BCM and
+sex have the highest VIFs, but neither reaches a level that would by
+itself invalidate the model. The covariate estimates should still be
+read as mutually adjusted associations, not as isolated biological
+effects.
+
+# Bootstrap Results
+
+```{r bootstrap_raw}
+summary_tbl |>
+  filter(model_type == "raw") |>
+  select(
+    Parameter = parameter_label,
+    `Median coefficient` = estimate,
+    `Bootstrap SE` = boot_se_fmt,
+    `95% percentile CI` = ci,
+    `Bootstrap p` = p_fmt,
+    `Pr(coef > 0)` = prop_positive,
+    `Pr(coef < 0)` = prop_negative,
+    Direction = direction
+  ) |>
+  gt::gt() |>
+  gt::fmt_number(columns = c(`Pr(coef > 0)`, `Pr(coef < 0)`), decimals = 3) |>
+  gt::tab_header(title = "Bootstrap summary: raw coefficients")
+```
+
+The raw bootstrap model confirms that post-baseline visits have positive
+coefficients. The 95% percentile CI excludes zero for M3, M6, M18, M30,
+and M48. The estimated raw increase is approximately 0.062 at M3, 0.070
+at M6, 0.105 at M18, 0.102 at M30, and 0.162 at M48, all relative to
+M0. Because `ig_gradient_enmo` is on a transformed accelerometry scale,
+the most useful clinical reading is the direction and robustness of the
+change rather than a direct bedside unit conversion.
+
+Age has a small but robust negative coefficient. BMI also has a robust
+negative between-patient association. BCM is mostly positive but its
+percentile CI crosses zero; therefore, the data do not support a
+definitive independent BCM effect in this model. Male sex is not
+estimated with sufficient precision to support a sex-specific
+conclusion.
+
+```{r bootstrap_standardized}
+summary_tbl |>
+  filter(model_type == "standardized") |>
+  select(
+    Parameter = parameter_label,
+    `Median coefficient` = estimate,
+    `Bootstrap SE` = boot_se_fmt,
+    `95% percentile CI` = ci,
+    `Bootstrap p` = p_fmt,
+    `Pr(coef > 0)` = prop_positive,
+    `Pr(coef < 0)` = prop_negative,
+    Direction = direction
+  ) |>
+  gt::gt() |>
+  gt::fmt_number(columns = c(`Pr(coef > 0)`, `Pr(coef < 0)`), decimals = 3) |>
+  gt::tab_header(title = "Bootstrap summary: standardized coefficients")
+```
+
+The standardized model makes the relative effect sizes easier to
+compare. The strongest standardized visit coefficient is M48, followed
+by M18 and M30, but this must be tempered by the sparse M48 data. Age
+and BMI have similar standardized negative associations
+(approximately -0.22 and -0.24 SD, respectively). BCM is positive
+(approximately +0.21 SD) but statistically uncertain because its
+bootstrap interval includes zero.
+
+# Figures
+
+```{r figures_raw, fig.cap='Raw-model bootstrap coefficient distributions and percentile confidence intervals.'}
+knitr::include_graphics(c(
+  file.path(path_boot, "bootstrap_density_raw.png"),
+  file.path(path_boot, "bootstrap_forest_raw.png")
+))
+```
+
+```{r figures_standardized, fig.cap='Standardized-model bootstrap coefficient distributions and percentile confidence intervals.'}
+knitr::include_graphics(c(
+  file.path(path_boot, "bootstrap_density_standardized.png"),
+  file.path(path_boot, "bootstrap_forest_standardized.png")
+))
+```
+
+The density plots show the empirical bootstrap distribution for each
+fixed-effect coefficient. A distribution concentrated on one side of
+zero supports directional robustness. The forest plots summarize the
+median bootstrap coefficient and the 95% percentile CI. The visual
+pattern is consistent with the tables: visit effects are consistently
+positive, age and BMI are consistently negative, while BCM and sex are
+less certain.
+
+# Table and File Dictionary
+
+The folder contains both human-readable and machine-readable versions of
+the results:
+
+- `bootstrap_lmer_report.xlsx`: Excel workbook with seven sheets. The
+  most important sheets are `full_sample_parameters_raw`,
+  `full_sample_collinearity_raw`, `bootstrap_summary`,
+  `bootstrap_status`, `bootstrap_all_parameters`, and `failed_boots`.
+- `bootstrap_summary.csv` / `bootstrap_summary.rds`: compact bootstrap
+  summary by model type and fixed-effect parameter.
+- `bootstrap_all_parameters.csv` / `bootstrap_all_parameters.rds`:
+  coefficient-level output from every bootstrap model. This table is the
+  audit trail for the bootstrap distributions.
+- `bootstrap_status.csv` / `bootstrap_status.rds`: convergence and
+  singularity summary for raw and standardized models.
+- `full_sample_model_raw.rds`: fitted `lmerMod` object for the
+  full-sample raw model.
+- `bootstrap_density_raw.png` and
+  `bootstrap_density_standardized.png`: density plots of bootstrap
+  coefficient distributions.
+- `bootstrap_forest_raw.png` and
+  `bootstrap_forest_standardized.png`: forest plots of median bootstrap
+  coefficients with percentile CI.
+
+Column definitions:
+
+- `model_type`: raw or standardized model. In the standardized model,
+  continuous predictors and the response are z-standardized.
+- `Parameter`: model coefficient. `examM3`, `examM6`, `examM18`,
+  `examM30`, and `examM48` are visit contrasts relative to M0.
+  `sexMale` is male sex relative to female. `bcm_between` and
+  `bmi_between` are between-patient components of BCM and BMI.
+- `n_success`: number of successful bootstrap fits contributing to the
+  parameter summary.
+- `estimate_mean`, `estimate_median`: mean and median bootstrap
+  coefficient.
+- `boot_se`: standard deviation of the bootstrap coefficient
+  distribution.
+- `ci_low_percentile`, `ci_high_percentile`: 2.5th and 97.5th
+  percentiles of the bootstrap coefficient distribution.
+- `p_boot_two_sided`: empirical two-sided bootstrap p value calculated
+  from the proportion of coefficients on either side of zero.
+- `prop_positive`, `prop_negative`: proportion of bootstrap coefficients
+  greater than or less than zero.
+- `Coefficient`, `SE`, `CI_low`, `CI_high`, `t`, `df_error`, `p`: fixed
+  effect estimate and model-based uncertainty from a single fitted
+  model.
+- `VIF`: variance inflation factor. Higher values indicate stronger
+  collinearity with other predictors.
+- `Tolerance`: reciprocal information to VIF; lower values indicate
+  stronger collinearity.
+- `boot_id`: bootstrap replicate number in the coefficient table; in
+  the fitted model formula, `boot_id` also identifies the patient or
+  bootstrap cluster for the random intercept.
+- `converged`, `singular`, `error_message`: model fit diagnostics.
+- `n_obs`, `n_groups`: number of model observations and random-effect
+  groups used in a fitted bootstrap model.
+
+# Clinical Interpretation
+
+From a clinical perspective, the most reproducible signal is the
+increase in accelerometer-derived `ig_gradient_enmo` after baseline.
+This supports the interpretation that longitudinal accelerometry can
+capture change in physical behavior or functional status in IIM. The
+finding is biologically plausible because accelerometer-derived physical
+activity has been proposed as a useful outcome domain in IIM, where
+standard clinical measures may not fully capture day-to-day functional
+capacity. A review of accelerometer-derived physical activity in IIM
+concluded that the field is still developing, but that accelerometry has
+promise for disease-activity and intervention assessment
+([Oldroyd et al., 2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6805320/)).
+An adult IIM study also described physical activity monitoring as a
+promising outcome measure
+([Bachasson et al., 2017](https://pubmed.ncbi.nlm.nih.gov/28566549/)).
+
+The negative age effect indicates that older patients tend to have lower
+accelerometry signal after adjustment for visit, sex, BCM, and BMI. This
+is clinically expected and should be treated as an important confounder
+in future models of activity and muscle status.
+
+The negative BMI effect is also clinically meaningful. Higher BMI can
+reduce ambulatory activity, alter wrist-accelerometer signal, and partly
+mask muscle-quality or disease-activity relationships. Because the model
+uses the between-patient BMI component, this result should be read as:
+patients with higher average BMI across follow-up tend to have lower
+`ig_gradient_enmo`, independent of visit and the other covariates.
+
+BCM is directionally positive but uncertain. This fits the clinical
+expectation that greater cellular/muscle mass may relate to better
+activity, but the current dataset does not provide strong independent
+evidence once BMI, age, sex, and visit are included. In a manuscript,
+this should be presented as supportive but not confirmatory.
+
+Phase angle is not the dependent variable in this bootstrap model, but
+it is central to the broader biological context. BIA-derived phase angle
+is commonly interpreted as a marker related to cell membrane integrity,
+fluid distribution, nutritional status, and muscle quality. Reviews and
+clinical studies support its relevance for muscle quality and sarcopenia
+assessment
+([Norman et al., 2012](https://pubmed.ncbi.nlm.nih.gov/22698802/);
+[Akamatsu et al., 2022](https://pubmed.ncbi.nlm.nih.gov/34845859/);
+[Di Vincenzo et al., 2021](https://pubmed.ncbi.nlm.nih.gov/33183880/)).
+In IIM, where inflammation, muscle damage, glucocorticoid exposure,
+fatigue, and deconditioning can coexist, phase angle and accelerometry
+should be interpreted as complementary functional-bioelectrical readouts
+rather than interchangeable measures.
+
+# Manuscript-Oriented Summary
+
+In a longitudinal IIM dataset of 64 patients and 219 observations,
+bootstrap mixed-effects modelling showed robust positive visit effects
+for `ig_gradient_enmo` after baseline. The analysis used 5000 bootstrap
+cycles with patient-level resampling and repeated preprocessing within
+each cycle. All raw and standardized bootstrap models converged without
+singular fits. Compared with M0, visit coefficients were consistently
+positive from M3 through M48. Age and between-patient BMI were
+independently and robustly negatively associated with
+`ig_gradient_enmo`. Between-patient BCM showed a positive but
+statistically uncertain association, and male sex was not clearly
+associated with the outcome.
+
+These results support the use of accelerometer-derived activity
+measures as a longitudinal functional readout in IIM. The findings also
+indicate that age and BMI must be retained as clinically relevant
+covariates in models linking activity, body composition, and phase
+angle. The sparse late follow-up, particularly M48, should be explicitly
+acknowledged as a limitation.
+
+# References
+
+- Akamatsu Y, Kusakabe T, Arai H, et al. Phase angle from
+  bioelectrical impedance analysis is a useful indicator of muscle
+  quality. *Journal of Cachexia, Sarcopenia and Muscle*. 2022;13:180-189.
+  doi: [10.1002/jcsm.12860](https://pubmed.ncbi.nlm.nih.gov/34845859/).
+- Bachasson D, Landon-Cardinal O, Benveniste O, Hogrel JY, Allenbach Y.
+  Physical activity monitoring: A promising outcome measure in
+  idiopathic inflammatory myopathies. *Neurology*. 2017;89:101-103.
+  doi: [10.1212/WNL.0000000000004061](https://pubmed.ncbi.nlm.nih.gov/28566549/).
+- Bates D, Mächler M, Bolker B, Walker S. Fitting linear mixed-effects
+  models using lme4. *Journal of Statistical Software*. 2015;67:1-48.
+  doi: [10.18637/jss.v067.i01](https://www.jstatsoft.org/v67/i01/).
+- Di Vincenzo O, Marra M, Di Gregorio A, Pasanisi F, Scalfi L.
+  Bioelectrical impedance analysis-derived phase angle in sarcopenia: A
+  systematic review. *Clinical Nutrition*. 2021;40:3052-3061.
+  doi: [10.1016/j.clnu.2020.10.048](https://pubmed.ncbi.nlm.nih.gov/33183880/).
+- Efron B. Bootstrap methods: Another look at the jackknife. *The
+  Annals of Statistics*. 1979;7:1-26. doi:
+  [10.1214/aos/1176344552](https://doi.org/10.1214/aos/1176344552).
+- Norman K, Stobäus N, Pirlich M, Bosy-Westphal A. Bioelectrical phase
+  angle and impedance vector analysis: clinical relevance and
+  applicability of impedance parameters. *Clinical Nutrition*.
+  2012;31:854-861. doi:
+  [10.1016/j.clnu.2012.05.008](https://pubmed.ncbi.nlm.nih.gov/22698802/).
+- Oldroyd A, Little MA, Dixon W, Chinoy H. A review of
+  accelerometer-derived physical activity in the idiopathic inflammatory
+  myopathies. *BMC Rheumatology*. 2019;3:41. doi:
+  [10.1186/s41927-019-0088-1](https://pmc.ncbi.nlm.nih.gov/articles/PMC6805320/).
+
+# Session Info
+
+```{r session_info}
+sessioninfo::session_info()
+```
