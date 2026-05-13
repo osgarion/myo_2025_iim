@@ -421,56 +421,72 @@ save_subgroup_pdf(sub_creatine, "fig_hmgcr", paste0("output/figures/", date_pref
 
 library(mixOmics)
 
-## variables + display labels from MDA sheet ----
-# mda_labels: lookup tabuľka so tromi stĺpcami:
-#   $abbreviation — pôvodná hodnota z Excelu (referencia)
-#   $name_en      — display label pre graf (nepozmenený)
-#   $name_clean   — make_clean_names(abbreviation) = skutočný názov stĺpca v datasete
-mda_labels <- tryCatch({
+## variables to include in PLS-DA — taken from 'abbreviation' column of MDA sheet ----
+pls_vars <- tryCatch({
   mda_raw <- import(path_clin_01, which = "260507_MDAcategories ")
   names(mda_raw) <- janitor::make_clean_names(names(mda_raw))
-  tibble(
-    abbreviation = mda_raw$abbreviation,
-    name_en      = mda_raw$name_en,
-    name_clean   = janitor::make_clean_names(mda_raw$abbreviation)
-  )
+  janitor::make_clean_names(mda_raw$abbreviation)
 }, error = function(e) {
-  message("Sheet '260507_MDAcategories': ", conditionMessage(e))
-  tibble(abbreviation = character(0), name_en = character(0), name_clean = character(0))
+  message("Sheet '260507_MDAcategories': ", conditionMessage(e), " — no column filtering applied.")
+  character(0)
 })
 
-pls_vars <- mda_labels$name_clean
-
-## load gene expression + myokine data (Treatment Response file) ----
-# pls_vars obsahuje také mstn_m0_pg_ml, fst_m0_pg_ml atd. a génové markery
-# (acvr1b, smad2, foxo1, trim63, fbxo32 atd.) — ty jsou v tomto souboru
-if (!exists("d07_pls")) {
-  path_response_01 <- file_to_load(phrase = "Treatment Response",
-                                    folder_path = folder_path) |> tail(1)
-  d07_pls <- import(path_response_01) |>
-    janitor::clean_names() |>
-    mutate(across(where(is.character), ~na_if(.x, "x")),
-           projekt_id = as.factor(projekt_id),
-           across(where(is.character), as.numeric)) |>
-    droplevels()
-}
-
-## data — d02_clinics_rev + d07_pls ----
-# projekt_id se vyřazuje (stane se rownames), zbývající pls_vars jdou do modelu
-pls_vars_sel <- pls_vars[pls_vars != "projekt_id"]
-
-d_pls_m0_rev <- d02_clinics_rev |>
-  filter(poradie_vysetrenia == "M0", !is.na(mda_categories)) |>
-  left_join(d07_pls, by = "projekt_id") |>
-  select(projekt_id, mda_categories, any_of(pls_vars_sel)) |>
+## data ----
+#
+# VÝBĚR PROMĚNNÝCH A OŠETŘENÍ CHYBĚJÍCÍCH HODNOT
+# -----------------------------------------------
+# Vstup: d03_rev filtrovaný na M0 → 57 pacientů, všichni mají mda_categories.
+#
+# Vyřazené proměnné (záměrně, před PLS-DA):
+#   - muscle_disease_activity  : zdrojová kontinuální proměnná pro mda_categories
+#                                (data leakage — triviálně by separovala skupiny)
+#   - odpoved_na_terapii_m0_vs_m6 : outcome léčby, v M0 neznámý
+#
+# Log-transformace (pravostranně zešikmené klinické markery):
+#   ast, alt, ck, crp, haq, ld, mitax, myoact, myoglobin → log(x + 1)
+#
+# Problém s chybějícími hodnotami:
+#   Bez dalšího ošetření by complete.cases() ponechal jen 22 ze 57 pacientů.
+#   Hlavní zdroje NA (ze 57 pacientů):
+#     sf36_mcs / sf36_pcs : 16 NA (28 %)
+#     sf36_gh              : 15 NA (26 %)
+#     sf36_vt/re/mh        : 13 NA (23 %)
+#     sf36_pf/rp/bp/sf     : 12 NA (21 %)
+#     anti_hmgcr           : 10 NA (18 %)
+#     fi_2, borg10         :  8 NA (14 %)
+#     ld                   :  6 NA (11 %)
+#     fstl3                :  5 NA  (9 %)
+#   Různí pacienti mají chybějící hodnoty v různých proměnných → kombinace
+#   vyřadí 35 pacientů.
+#
+# Řešení:
+#   1. Práh 40 % — odstraní proměnné se strukturální absencí (v tomto datasetu
+#      žádná proměnná nepřekračuje 40 %, jde o pojistku pro budoucí datové verze).
+#   2. Jednorázová mice imputace (PMM, m = 1, maxit = 10, seed = 42) doplní
+#      zbývající NA → finální dataset má 57 kompletních řádků.
+#
+d_pls_m0_rev <- d03_rev |>
+  filter(poradie_vysetrenia == "M0") |>
+  mutate(
+    across(.cols = c("ast", "alt", "ck", "crp", "haq", "ld", "mitax", "myoact", "myoglobin"),
+           function(x) log(x + 1)),
+    jo_1       = as.factor(jo_1),
+    anti_hmgcr = as.factor(anti_hmgcr)
+  ) |>
+  select(projekt_id, mda_categories,
+         pohlavi, jo_1, anti_hmgcr, podtyp_nemoci_zjednoduseny,
+         any_of(var_dep_01 |> str_subset("odpoved_na_terapii_m0_vs_m6|muscle_disease_activity", negate = TRUE)),
+         any_of(var_indep_01)) |>
+  filter(!is.na(mda_categories)) |>
   tibble::column_to_rownames("projekt_id")
 
-# práh 40 % — vyřadí proměnné se strukturální absencí dat
+# práh 40 % — pojistka proti strukturální absenci, neodstraní žádnou proměnnou
+# v aktuálních datech (max NA rate = 28 % u sf36_mcs / sf36_pcs)
 na_rate   <- colMeans(is.na(d_pls_m0_rev |> select(-mda_categories)))
 keep_cols <- names(na_rate[na_rate <= 0.40])
 d_pls_m0_rev <- d_pls_m0_rev |> select(mda_categories, all_of(keep_cols))
 
-# mice PMM imputace
+# mice PMM imputace — zachová všech 57 pacientů
 set.seed(42)
 d_pls_m0_rev_imp <- mice::mice(d_pls_m0_rev, method = "pmm",
                                 m = 1, maxit = 10, printFlag = FALSE) |>
@@ -523,23 +539,12 @@ run_plsda_rev <- function(df, yvar, prefix,
   list(model = pls_mod, Y = Y)
 }
 
-## rename columns to name_en display labels ----
-# mda_categories a projekt_id sa vylúčia — sú to ID/grouping stĺpce, nie prediktory
-rename_labels <- mda_labels |>
-  filter(!name_clean %in% c("mda_categories", "projekt_id"))
-
-d_pls_m0_rev_imp_labeled <- d_pls_m0_rev_imp |>
-  rename_with(
-    ~ str_replace_all(., setNames(rename_labels$name_en,
-                                  paste0("^", rename_labels$name_clean, "$"))),
-    any_of(rename_labels$name_clean)
-  )
-
 ## run ----
 pls_m0_rev_mda <- run_plsda_rev(
-  df     = d_pls_m0_rev_imp_labeled,
-  yvar   = "mda_categories",
-  prefix = paste0(date_prefix, "_revize_m0_pls")
+  df       = d_pls_m0_rev_imp,
+  yvar     = "mda_categories",
+  prefix   = paste0(date_prefix, "_revize_m0_pls"),
+  sel_vars = pls_vars
 )
 
 
@@ -569,42 +574,4 @@ rmarkdown::render(
   quiet       = TRUE
 )
 message("Report rendered: reports/", date_prefix, "_iim_revize_02_report.html")
-
-
-# **********************************************************************
-# 9. Copy outputs to archive folder ----
-# **********************************************************************
-
-archive_dir <- "R:/MYOZITIDY_VÝZKUM/_IMMET-GRANT/IMMET štatistika/Output/20260512"
-
-if (dir.exists(archive_dir)) {
-
-  # collect all outputs generated in this run matching date_prefix
-  all_files <- c(
-    list.files("output/figures",
-               pattern    = paste0("^", date_prefix, "_revize_.*\\.(pdf|tiff)$"),
-               full.names = TRUE),
-    list.files("output/figures/cluster analyses",
-               pattern    = paste0("^", date_prefix, "_revize_.*\\.tiff$"),
-               full.names = TRUE),
-    list.files("output/tables",
-               pattern    = paste0("^", date_prefix, ".*revize.*\\.xlsx$"),
-               full.names = TRUE)
-  )
-
-  if (length(all_files) == 0) {
-    message("Archive copy: no output files matching '", date_prefix, "_revize_*' found.")
-  } else {
-    copied <- file.copy(all_files, file.path(archive_dir, basename(all_files)),
-                        overwrite = TRUE)
-    message("Archive copy: ", sum(copied), "/", length(all_files),
-            " files copied to ", archive_dir)
-    if (any(!copied)) {
-      warning("Failed to copy: ", paste(basename(all_files[!copied]), collapse = ", "))
-    }
-  }
-
-} else {
-  message("Archive directory not found — skipping copy: ", archive_dir)
-}
 beep(4)

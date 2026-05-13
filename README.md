@@ -42,44 +42,43 @@ Nové výstupy: `output/figures/YYMMDD_revize_{covariate}_{stratification}.pdf`
 
 - **Skript:** sekce 6 v `scripts/Script_myo_2025_iim_02.R`
 - **Metoda:** `mixOmics::plsda()`, ncomp = 2, scale = TRUE
-- **Data:** `d03_rev` filtrovaný na M0 → 57 pacientů, všichni mají `mda_categories`
+- **Data:** `d02_clinics_rev` (M0, s `mda_categories`) left-join `d07_pls` (Treatment Response soubor)
 - **Výstupy:** `output/figures/cluster analyses/YYMMDD_revize_m0_pls_mda_categories_{group,loadings}.tiff`
 - **Vzorové výstupy z původního datasetu:** složky `251113` a `251120` na R:\ disku
 
 #### Výběr prediktorů
 
-Jako prediktory vstupují všechny klinické a myokinové proměnné z `var_dep_01` a `var_indep_01`, s výjimkou:
+Prediktory jsou **výhradně proměnné uvedené v záložce `260507_MDAcategories`** (`IMMET_terapie a klinická data_01102025.xlsx`), sloupec `abbreviation`. Záložka obsahuje tři sloupce:
 
-| Proměnná | Důvod vyřazení |
+| Sloupec | Popis |
 | --- | --- |
-| `muscle_disease_activity` | zdrojová kontinuální proměnná pro `mda_categories` — data leakage, triviálně by separovala skupiny |
-| `odpoved_na_terapii_m0_vs_m6` | outcome léčby, v M0 neznámý |
+| `abbreviation` | přesný název sloupce v datasetu (před `clean_names()`) |
+| `name_en` | zobrazovaný popisek v grafech (zachovány velká/malá písmena a mezery) |
+| `name_clean` | `janitor::make_clean_names(abbreviation)` — skutečný název sloupce po načtení dat |
 
-Log-transformace před PLS-DA (pravostranně zešikmené markery): `ast`, `alt`, `ck`, `crp`, `haq`, `ld`, `mitax`, `myoact`, `myoglobin` → `log(x + 1)`.
+Z těchto proměnných pochází dvě skupiny dat:
 
-Přejmenování os v loadings grafu: načítá se z listu `260507_MDA categories` v `IMMET_terapie a klinická data_01102025.xlsx`. Pokud list neexistuje, skript pokračuje s původními názvy sloupců.
+- **klinické proměnné** — z `d02_clinics_rev`
+- **genová exprese a myokiny s příponou `_m0_pg_ml`** (acvr1b, smad2, foxo1, trim63, fbxo32, mstn_m0_pg_ml, fst_m0_pg_ml aj.) — z `d07_pls` (Treatment Response soubor)
+
+`projekt_id` je z analýzy vyřazen (identifikátor pacienta, ne prediktor).
+
+Přejmenování sloupců na `name_en` probíhá těsně před spuštěním PLS-DA pomocí `rename_with()` + `str_replace_all()` s přesnými shodami (`^pattern$`) — zabraňuje přejmenování částečně překrývajících se názvů (např. `fst` uvnitř `fstl3`).
 
 #### Ošetření chybějících hodnot
 
-Bez ošetření by `complete.cases()` ponechal pouze **22 ze 57 pacientů**. Přehled NA v klíčových prediktorech:
-
-| Proměnná | NA (n) | NA (%) |
-| --- | --- | --- |
-| `sf36_mcs`, `sf36_pcs` | 16 | 28 % |
-| `sf36_gh` | 15 | 26 % |
-| `sf36_vt`, `sf36_re`, `sf36_mh` | 13 | 23 % |
-| `sf36_pf`, `sf36_rp`, `sf36_bp`, `sf36_sf` | 12 | 21 % |
-| `anti_hmgcr` | 10 | 18 % |
-| `fi_2`, `borg10` | 8 | 14 % |
-| `ld` | 6 | 11 % |
-| `fstl3` | 5 | 9 % |
-
-Různí pacienti mají NA v různých proměnných → jejich kombinace vyřadí 35 pacientů.
-
 **Postup:**
 
-1. **Práh 40 %** — proměnné s více než 40 % NA jsou vyřazeny (pojistka pro strukturální absenci; v aktuálních datech žádná proměnná tento práh nepřekračuje, max. je 28 % u SF-36).
-2. **Mice imputace** — `mice::mice(method = "pmm", m = 1, maxit = 10, seed = 42)` doplní zbývající NA. Finální dataset pro PLS-DA má **57 kompletních řádků**.
+1. **Práh 40 %** — proměnné s více než 40 % NA jsou vyřazeny (pojistka pro strukturální absenci).
+2. **Mice imputace** — `mice::mice(method = "pmm", m = 1, maxit = 10, seed = 42)` doplní zbývající NA do plného datasetu.
+
+### Kopie obrázků do archivní složky
+
+Na konci `Script_myo_2025_iim_02.R` (sekce 9) se automaticky kopírují všechny obrázky vygenerované v daném běhu (PDF post-hoc grafy + TIFF PLS-DA) do:
+
+`R:\MYOZITIDY_VÝZKUM\_IMMET-GRANT\IMMET štatistika\Output\20260512`
+
+Kopírují se soubory odpovídající vzoru `{YYMMDD}_revize_*.pdf` a `{YYMMDD}_revize_*.tiff`. Pokud složka neexistuje, sekce se přeskočí a vypíše varování.
 
 ### Report — `reports/260511_iim_revize_02_report.Rmd`
 

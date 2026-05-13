@@ -38,6 +38,7 @@ conflicted::conflicts_prefer(
   dplyr::relocate,
   lmerTest::lmer,
   dplyr::recode,
+  lmerTest::lmer,
   GLMMadaptive::predict
 )
 
