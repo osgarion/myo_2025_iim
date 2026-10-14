@@ -1,0 +1,4 @@
+% Typography (user standard) for the PDF output; falls back to the default font if absent.
+\usepackage{fontspec}
+\IfFontExistsTF{Palatino Linotype}{\setmainfont{Palatino Linotype}}{\IfFontExistsTF{TeX Gyre Pagella}{\setmainfont{TeX Gyre Pagella}}{}}
+\IfFontExistsTF{Trebuchet MS}{\setsansfont{Trebuchet MS}}{}

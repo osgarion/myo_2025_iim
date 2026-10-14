@@ -1,0 +1,45 @@
+Script: 06_VALIDATION_BOTH.R
+Run: 2026-10-14 11:00:43 CEST
+Input: F:/Analysis/Vernerová Lucia/myo_2025_iim/data/threshold/MYOII_ACC_OUTCOMES_MASTER_V1.rds
+Input md5: a4821db9803a46c31eb4dc6639add5b9
+Master created by: P06_BUILD_MYOII_ACC_OUTCOMES_MASTER_V3 (2026-10-12 14:08)
+N_SIM: 500
+B_SIM: 1000
+
+R version 4.6.1 (2026-06-24 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26300)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=Czech_Czechia.utf8  LC_CTYPE=Czech_Czechia.utf8    LC_MONETARY=Czech_Czechia.utf8 LC_NUMERIC=C                  
+[5] LC_TIME=Czech_Czechia.utf8    
+
+time zone: Europe/Prague
+tzcode source: internal
+
+attached base packages:
+[1] splines   stats     graphics  grDevices datasets  utils     methods   base     
+
+other attached packages:
+ [1] sessioninfo_1.2.4 kableExtra_1.4.1  knitr_1.52        gridExtra_2.3.1   patchwork_1.3.2   janitor_2.2.1    
+ [7] rio_1.3.0         renv_1.2.2        conflicted_1.2.0  lubridate_1.9.5   forcats_1.0.1     stringr_1.6.0    
+[13] readr_2.2.0       tibble_3.3.1      tidyverse_2.0.0   pacman_0.5.1      future_1.76.0     ggplot2_4.0.3    
+[19] purrr_1.2.2       tidyr_1.3.2       dplyr_1.2.1      
+
+loaded via a namespace (and not attached):
+ [1] writexl_2.0.1       tidyselect_1.2.1    viridisLite_0.4.3   glmmTMB_1.1.15.2    farver_2.1.2        R.utils_2.13.0     
+ [7] S7_0.2.2            fastmap_1.2.0       digest_0.6.39       timechange_0.4.0    lifecycle_1.0.5     magrittr_2.0.5     
+[13] compiler_4.6.1      sass_0.4.10         rlang_1.3.0         tools_4.6.1         utf8_1.2.6          yaml_2.3.12        
+[19] labeling_0.4.3      xml2_1.6.0          RColorBrewer_1.1-3  withr_3.0.3         numDeriv_2016.8-1.1 R.oo_1.27.1        
+[25] grid_4.6.1          globals_0.20.0      scales_1.4.0        MASS_7.3-66         cli_3.6.6           rmarkdown_2.32     
+[31] reformulas_0.4.4    generics_0.1.4      rstudioapi_0.19.0   tzdb_0.5.0          readxl_1.5.0.1      minqa_1.2.8        
+[37] cachem_1.1.0        parallel_4.6.1      BiocManager_1.30.27 cellranger_1.1.0    vctrs_0.7.3         boot_1.3-32        
+[43] Matrix_1.7-6        sandwich_3.1-3      jsonlite_2.0.0      hms_1.1.4           listenv_1.1.0       RTMB_2.0           
+[49] systemfonts_1.3.2   jquerylib_0.1.4     parallelly_1.48.0   glue_1.8.1          nloptr_2.2.1        codetools_0.2-20   
+[55] stringi_1.8.9       gtable_0.3.6        lme4_2.0-6          furrr_0.4.0         pillar_1.11.1       htmltools_0.5.9    
+[61] R6_2.6.1            TMB_1.9.25          textshaping_1.0.5   Rdpack_2.6.6        evaluate_1.0.5      lattice_0.23-1     
+[67] R.methodsS3_1.8.2   rbibutils_2.4.1     memoise_2.0.1       snakecase_0.11.1    bslib_0.12.0        Rcpp_1.1.2         
+[73] svglite_2.2.2       nlme_3.1-171        mgcv_1.9-4          xfun_0.61           zoo_1.9-1           pkgconfig_2.0.3    

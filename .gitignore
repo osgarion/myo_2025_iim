@@ -86,3 +86,15 @@ data/processed/
 !tables/final/*.xls
 !data/processed/d_objects_all.RData
 .positai
+
+# =========================
+# MYO-II thresholds (data/threshold/working): aggregated results are versioned
+# (no patient-level rows or identifiers); bootstrap checkpoints, TIFFs, the master
+# RDS and older outputs in data/threshold stay local
+# =========================
+!data/threshold/working/output/
+!data/threshold/working/output/tables/
+!data/threshold/working/output/tables/*.xlsx
+!data/threshold/working/output/figures/*.png
+!data/threshold/working/docs/*.csv
+data/threshold/working/output/RData/boot_chunks/
