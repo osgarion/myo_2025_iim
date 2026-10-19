@@ -18,6 +18,7 @@
 # ---
 #   01 QC -> 02 PRIMARY (bootstrap) -> 03 SENSITIVITY -> 04 DESCRIPTIVE
 #   -> 05 FIGURES -> 06 VALIDATION -> report
+#   Revision A07: 07 (A, B) -> 08 (C, D) -> 09 (E) -> 10 VALIDATION -> report v2
 #
 # OUTPUTS
 # ---
@@ -48,7 +49,10 @@ if (!exists("WORKING_DIR") || !file.exists(file.path(WORKING_DIR, "R", "00_confi
 source(file.path(WORKING_DIR, "R", "00_config.R"))
 
 steps <- c("01_QC_data_dictionary_BOTH.R", "02_PRIMARY_bootstrap_BOTH.R", "03_SENSITIVITY_BOTH.R",
-           "04_DESCRIPTIVE_heterogeneity_BINS.R", "05_FIGURES_TABLES_BOTH.R", "06_VALIDATION_BOTH.R")
+           "04_DESCRIPTIVE_heterogeneity_BINS.R", "05_FIGURES_TABLES_BOTH.R", "06_VALIDATION_BOTH.R",
+           # Revision A07 (2026-10-16): needs klinicka_data_12102026.xlsx for 09 (see README §9)
+           "07_REV_A_B_profile_concentration_BINS.R", "08_REV_C_D_E3_shape_BOTH.R",
+           "09_REV_E_subtypes_clinical.R", "10_REV_VALIDATION_BOTH.R")
 timing <- list()
 for (s in steps) {
   message("\n==================== ", s, " ====================")
@@ -60,5 +64,9 @@ for (s in steps) {
 
 check_packages(PKG_REPORT)
 rmarkdown::render(file.path(WORKING_DIR, "reports", "261013_thresholds_report.Rmd"),
+                  output_format = "html_document", envir = new.env())
+rmarkdown::render(file.path(WORKING_DIR, "reports", "261016_thresholds_report_v2.Rmd"),
+                  output_format = "html_document", envir = new.env())
+rmarkdown::render(file.path(WORKING_DIR, "reports", "261016_thresholds_report_v2_cz.Rmd"),
                   output_format = "html_document", envir = new.env())
 print(tibble::enframe(unlist(timing), name = "script", value = "minutes"))

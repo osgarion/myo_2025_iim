@@ -1,0 +1,1950 @@
+---
+title: "MYO-II / Paper A — Které části intenzitního spektra ENMO nesou longitudinální změnu? (revize A07)"
+author: "Veronika Balounová"
+date: "Vytvořeno: **2026-10-13**; revize A07: **2026-10-16**  <br> Naposledy aktualizováno **`r format(Sys.time(), '%Y-%m-%d')`**"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+    latex_engine: xelatex
+    includes:
+      in_header: fonts_header.tex
+lang: cs
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{=html}
+<style type="text/css">
+.title {
+  text-align: center;
+}
+.author {
+  font-size: 30px;
+  text-align: center;
+  font-style: italic;
+  font-weight: 300;
+}
+.date {
+  font-weight: 300;
+}
+h1, h2, h3, h4 {
+    font-weight: 600;
+    margin-top: 2em;
+}
+body {text-align: justify}
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    border-left: 5px solid #eee;
+}
+p {
+  text-indent: 2rem;
+}
+table {
+    width:100%;
+}
+.main-container {
+  max-width: 100% !important;
+  margin: auto;
+}
+img{
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+}
+.boxBorder {
+     border: 2px solid #990066;
+     padding: 10px;
+     outline: #990066 solid 5px;
+     outline-offset: 5px;
+   }
+.note-box {
+  border-left: 4px solid #2196F3; background: #f0f7ff;
+  padding: 10px 16px; margin: 1em 0; font-size: 13px;
+}
+.finding-box {
+  border-left: 4px solid #4CAF50; background: #f1f8f1;
+  padding: 10px 16px; margin: 1em 0; font-size: 13px;
+}
+.warning-box {
+  border-left: 4px solid #FF9800; background: #fff8f0;
+  padding: 10px 16px; margin: 1em 0; font-size: 13px;
+}
+.todo-box {
+  border-left: 4px solid #9C27B0; background: #f9f0fc;
+  padding: 10px 16px; margin: 1em 0; font-size: 13px;
+}
+.note-box p, .finding-box p, .warning-box p, .todo-box p {
+  text-indent: 0;
+}
+</style>
+```
+
+```{=html}
+<style type="text/css">
+/* Typography (user standard): serif body, sans-serif headings */
+body, p, li, td, th { font-family: "Palatino Linotype", "Book Antiqua", Palatino, "TeX Gyre Pagella", Georgia, serif; }
+h1, h2, h3, h4, .title, .author, .date, #TOC, .tocify, caption { font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", Tahoma, sans-serif; }
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  knitr.kable.NA = ""
+)
+# Czech typography: decimal comma in all printed numbers (format(), formatC(), kable, inline output).
+options(knitr.kable.NA = "", scipen = 999, OutDec = ",")
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(update = FALSE,
+  tidyverse, purrr, conflicted, renv,
+  rio, janitor, patchwork, gridExtra,
+  knitr, kableExtra, sessioninfo
+)
+conflicted::conflicts_prefer(
+  dplyr::filter, dplyr::mutate, dplyr::rename,
+  dplyr::summarize, dplyr::summarise, dplyr::select,
+  dplyr::lag, purrr::map
+)
+
+# All paths relative to the Rmd file location (working/reports/) — no absolute paths.
+rmd_dir   <- normalizePath(dirname(knitr::current_input(dir = TRUE)), winslash = "/")
+proj_root <- normalizePath(file.path(rmd_dir, ".."), winslash = "/")
+
+path_figures <- file.path(proj_root, "output/figures")
+path_tables  <- file.path(proj_root, "output/tables")
+
+# Source project functions and base objects (harmless if this report needs none).
+fun_01 <- file.path(proj_root, "scripts/functions/FUN_01.R")
+obj_01 <- file.path(proj_root, "scripts/functions/OBJ_01.R")
+if (file.exists(fun_01)) try(source(fun_01, local = TRUE), silent = TRUE)
+if (file.exists(obj_01)) try(source(obj_01, local = TRUE), silent = TRUE)
+
+# Load pre-computed objects (scripts 01-10 in working/, see README.md). Nothing is computed here.
+for (obj in c("qc_objects", "primary_objects", "sensitivity_objects",
+              "descriptive_objects", "validation_objects", "figure_objects",
+              "rev_AB_objects", "rev_CD_objects", "rev_E_objects", "rev_validation_objects")) {
+  analysis_obj <- file.path(proj_root, "output/RData", paste0(obj, ".RData"))
+  if (file.exists(analysis_obj)) {
+    base::load(analysis_obj, envir = .GlobalEnv)
+  } else {
+    message("Analysis objects not found: ", obj, ". Run the working/ scripts first.")
+  }
+}
+
+# **********************************************************************
+# Czech translation layer (presentation only) ----
+# **********************************************************************
+# Exact translations of figure labels, facet / legend values and table values.
+CZ <- c(
+  # --- axes, legends
+  "Exclusive bin midpoint (mg)" = "Střed exkluzivního binu (mg)",
+  "Visit" = "Návštěva", "Variant" = "Varianta", "Contrast" = "Kontrast", "Denominator" = "Jmenovatel",
+  "Change vs M0 (min/day per 10 mg)" = "Změna vs M0 (min/den na 10 mg)",
+  "Cumulative threshold T (mg)" = "Kumulativní práh T (mg)",
+  "Change vs M0 (min/day above T)" = "Změna vs M0 (min/den nad T)",
+  "Ratio of means, follow-up / M0" = "Poměr průměrů, kontrola / M0",
+  "Ratio of means, follow-up / M0 (complete pairs)" = "Poměr průměrů, kontrola / M0 (kompletní páry)",
+  "Bin (geometric-mean intensity, mg)" = "Bin (geometrický střed intenzity, mg)",
+  "Mean paired clr change" = "Průměrná párová změna clr",
+  "Mean paired clr change vs M0" = "Průměrná párová změna clr vs M0",
+  "Mean clr change vs M0" = "Průměrná změna clr vs M0",
+  "Residual from smooth null" = "Reziduum od hladkého nullu",
+  "Residual from smooth trend" = "Reziduum od hladkého trendu",
+  "Exclusive bin (mg); 400-425 = time >= 400 mg" = "Exkluzivní bin (mg); 400–425 = čas ≥ 400 mg",
+  "Minutes/day within bin" = "Minuty/den v binu",
+  "Minutes/day per 10 mg" = "Minuty/den na 10 mg",
+  "Median and P10-P90" = "Medián a P10–P90",
+  "Top-10 % share of NET gain (%, log scale)" = "Podíl top 10 % na ČISTÉM zisku (%, log. škála)",
+  "df of the smooth null used in the test" = "df hladkého nullu použitého v testu",
+  "% of simulated datasets" = "% simulovaných datových souborů",
+  "Difference in clr change (later - earlier)" = "Rozdíl změny clr (pozdější − dřívější)",
+  "Difference in mean change from M0 (95% cluster-bootstrap CI)" = "Rozdíl průměrné změny od M0 (95% IS, cluster bootstrap)",
+  # --- titles, subtitles, captions (original figures F1-F7)
+  "Absolute change across exclusive bins (E1)" = "Absolutní změna v exkluzivních binech (E1)",
+  "MMRM; shaded = pointwise 95% CI, thin lines = simultaneous 95% band" = "MMRM; stínování = bodový 95% IS, tenké čáry = simultánní 95% pás",
+  "Absolute change in cumulative time above threshold" = "Absolutní změna kumulativního času nad prahem",
+  "MMRM; overlapping exposures; shaded = pointwise 95% CI, thin lines = simultaneous band" = "MMRM; překrývající se expozice; stínování = bodový 95% IS, tenké čáry = simultánní pás",
+  "Relative change across exclusive bins (E2)" = "Relativní změna v exkluzivních binech (E2)",
+  "MMRM marginal means; point at 412.5 mg = time >= 400 mg (grid edge, dotted line)" = "Marginální průměry MMRM; bod u 412,5 mg = čas ≥ 400 mg (okraj mřížky, tečkovaná čára)",
+  "Relative change in cumulative time above threshold" = "Relativní změna kumulativního času nad prahem",
+  "MMRM marginal means; overlapping exposures" = "Marginální průměry MMRM; překrývající se expozice",
+  "Three dimensions of longitudinal information" = "Tři dimenze longitudinální informace",
+  "Coverage = share of all recordings at that visit (denominator: recordings, not pairs)" = "Pokrytí = podíl všech záznamů dané návštěvy (jmenovatel: záznamy, ne páry)",
+  "A. Change vs M0 (min/day per 10 mg)" = "A. Změna vs M0 (min/den na 10 mg)",
+  "B. Bootstrap SE of change" = "B. Bootstrapová SE změny",
+  "C. Recordings with > 0.25 min/day per 10 mg (%)" = "C. Záznamy s > 0,25 min/den na 10 mg (%)",
+  "Where does change lie?" = "Kde leží změna?",
+  "Inner / outer simultaneous confidence sets for {effect > 0}" = "Vnitřní / vnější simultánní konfidenční množiny pro {efekt > 0}",
+  "inner set (certainly > 0)" = "vnitřní množina (jistě > 0)",
+  "outer set only (plausibly > 0)" = "jen vnější množina (možná > 0)",
+  "not in set" = "mimo množinu",
+  "E1 absolute" = "E1 absolutní", "E2 relative" = "E2 relativní",
+  "Relative change by subtype (descriptive)" = "Relativní změna podle podtypu (deskriptivně)",
+  "DM (codes 0, 4), IMNM (2, 3), ASyS (5); PM and UCTD/SSc excluded; no CIs, 12-18 pairs per cell" = "DM (kódy 0, 4), IMNM (2, 3), ASyS (5); PM a UCTD/SSc vyřazeni; bez IS, 12–18 párů v buňce",
+  # --- revision figures
+  "Descriptive spectrum profile: BINS, per 10 mg" = "Popisný profil spektra: BINY, na 10 mg",
+  "Median (line) and P10-P90 (band) of min/day per 10 mg of bin width; y on log(1+x) scale" = "Medián (čára) a P10–P90 (pás) min/den na 10 mg šířky binu; osa y v log(1+x)",
+  "Each recording normalised before summarising: min/day in bin x 10 / bin width (10, 20 or 25 mg). Dotted lines: bin width changes at 120 and 300 mg." = "Každý záznam normalizován před sumarizací: min/den v binu × 10 / šířka binu (10, 20 nebo 25 mg). Tečkované čáry: změna šířky binu u 120 a 300 mg.",
+  "Original vs per-10-mg descriptive profile" = "Původní vs normalizovaný popisný profil",
+  "The rise at 120-140 mg in A is created by the doubling of bin width (10 -> 20 mg)" = "Vzestup u 120–140 mg v panelu A vzniká zdvojnásobením šířky binu (10 → 20 mg)",
+  "A. Original: min/day within bin (raw)" = "A. Původně: min/den v binu (surově)",
+  "B. Revised: min/day per 10 mg" = "B. Revize: min/den na 10 mg",
+  "Is change a broad shift or a minority effect? (revised)" = "Je změna širokým posunem, nebo efektem menšiny? (revize)",
+  "Complete pairs; shaded = 95% cluster-bootstrap CI (pointwise); grey line = reference" = "Kompletní páry; stínování = 95% IS z cluster bootstrapu (bodový); šedá čára = reference",
+  "Grey reference: A 50 %; B share expected if all positive gains were equal (k / number of patients with a gain); C 0 (gains and losses cancel)." = "Šedá reference: A 50 %; B podíl, kdyby všechny kladné zisky byly stejné (k / počet pacientů se ziskem) = minimum; C 0 (zisky a ztráty se vyruší).",
+  "Top 10 % = ceiling(0.1 x pairs) patients with the largest gain, selected separately per bin and visit." = "Top 10 % = ceiling(0,1 × páry) pacientů s největším ziskem, vybraných zvlášť v každém binu a návštěvě.",
+  "20-120 mg (10-mg bins)" = "20–120 mg (biny 10 mg)",
+  "120-400 mg (20/25-mg bins)" = "120–400 mg (biny 20/25 mg)",
+  "A. Patients with a gain (%)" = "A. Pacienti se ziskem (%)",
+  "B. Top-10 % share of positive gains (%)" = "B. Podíl top 10 % na kladných ziscích (%)",
+  "C. Net / gross change (cancellation index)" = "C. Čistá / hrubá změna (index vyrušení)",
+  "Original estimand: share of the net cohort gain (kept for reproducibility)" = "Původní estimand: podíl na čistém zisku kohorty (ponechán kvůli reprodukovatelnosti)",
+  "Values > 100 % and the missing points arise when gains and losses nearly cancel" = "Hodnoty > 100 % a chybějící body vznikají, když se zisky a ztráty téměř vyruší",
+  "interpretable" = "interpretovatelný",
+  "unstable (net/gross < 0.20)" = "nestabilní (net/gross < 0,20)",
+  "A. Smooth redistribution" = "A. Hladká redistribuce",
+  "points = observed; dark curve = visit-specific smooth trend (ns, df 3)" = "body = pozorováno; tmavá křivka = hladký trend návštěvy (ns, df 3)",
+  "B. Localised departures" = "B. Lokální odchylky",
+  "shaded = simultaneous 95% band (max-t); a departure needs the band off 0" = "stínování = simultánní 95% pás (max-t); odchylka vyžaduje pás mimo 0",
+  "A: clr change > 0 (grey area) = the bin takes a larger share of the 24-h day relative to the geometric mean of all 21 parts; < 0 = smaller share." = "A: změna clr > 0 (šedá oblast) = bin zabírá větší podíl 24h dne vůči geometrickému průměru všech 21 částí; < 0 = menší podíl.",
+  "B: residual > 0 = more gain than the smooth trend predicts at that intensity; < 0 = less." = "B: reziduum > 0 = větší zisk, než při dané intenzitě předpovídá hladký trend; < 0 = menší.",
+  "Localised departure = >= 2 adjacent bins with the band excluding 0, bounded by bins that do not, away from the grid edges, invariant to zero handling / valid days / UCTD exclusion. Cluster bootstrap B = 2000." = "Lokální odchylka = ≥ 2 sousední biny s pásem mimo 0, ohraničené biny, kde pás 0 obsahuje, mimo okraje mřížky, invariantní vůči náhradě nul / validním dnům / vyřazení UCTD. Cluster bootstrap B = 2000.",
+  "E3 localised-departure residuals under alternative specifications" = "Rezidua lokálních odchylek E3 při alternativních specifikacích",
+  "black + shaded band = primary (native grid, df 3); thin lines = variants" = "černá + stínovaný pás = primární (nativní mřížka, df 3); tenké čáry = varianty",
+  "bounded bins to 400 mg (df 3)" = "ohraničené biny do 400 mg (df 3)",
+  "linear null (df 1)" = "lineární null (df 1)",
+  "uniform 20-mg grid (df 3)" = "jednotná mřížka 20 mg (df 3)",
+  "width-weighted (df 3)" = "váženo šířkou (df 3)",
+  "primary (native, df 3)" = "primární (nativní, df 3)",
+  "primary" = "primární",
+  "composition range change (estimand changes)" = "změna rozsahu kompozice (mění estimand)",
+  "smooth-null specification" = "specifikace hladkého nullu",
+  "resolution change (estimand changes)" = "změna rozlišení (mění estimand)",
+  "Choice of df: false alarms and power of the bump rule" = "Volba df: falešné poplachy a síla pravidla hrbu",
+  "True-null plasmode; 500 datasets x 1000 bootstrap replicates per cell; grey line = 5 %" = "Plasmode se skutečným nullem; 500 souborů × 1000 bootstrapových replikací v buňce; šedá čára = 5 %",
+  "null" = "null",
+  "A. Visit-specific smooth trends (descriptive)" = "A. Hladké trendy jednotlivých návštěv (deskriptivně)",
+  "B. Paired differences between visits" = "B. Párové rozdíly mezi návštěvami",
+  "same patients; dark = pointwise 95% CI, light = simultaneous band" = "stejní pacienti; tmavě = bodový 95% IS, světle = simultánní pás",
+  "all with M0 + both visits" = "všichni s M0 a oběma návštěvami",
+  "common sample (all four visits)" = "společný vzorek (všechny 4 návštěvy)",
+  "Subtype differences in change, unadjusted and adjusted (exploratory)" = "Rozdíly změny mezi podtypy, neadjustované a adjustované (exploratorně)",
+  "Random-intercept models of change; DM = reference; PM and UCTD/SSc excluded" = "Modely změny s náhodným interceptem; DM = reference; PM a UCTD/SSc vyřazeni",
+  "ph_VAS per 10 mm and MMT8 per 5 points, centred; B = 2000. Rows 1 vs 2 separate sample restriction from adjustment." = "ph_VAS na 10 mm a MMT8 na 5 bodů, centrováno; B = 2000. Řádky 1 vs 2 oddělují vliv omezení vzorku od vlivu adjustace.",
+  "dT100 (min/day)" = "ΔT100 (min/den)", "clr tilt (per log mg)" = "sklon clr (na log mg)", "dIG" = "ΔIG",
+  "1 unadjusted, all patients" = "1 neadjustováno, všichni pacienti",
+  "2 unadjusted, ph_VAS sample" = "2 neadjustováno, vzorek s ph_VAS",
+  "3 + ph_VAS (primary adjusted)" = "3 + ph_VAS (hlavní adjustace)",
+  "4 + ph_VAS x visit" = "4 + ph_VAS × návštěva",
+  "5 + ph_VAS + baseline outcome" = "5 + ph_VAS + výchozí hodnota výsledku",
+  "6 + MMT8 (sensitivity)" = "6 + MMT8 (citlivost)",
+  "mean M3-M18" = "průměr M3–M18",
+  # --- table values
+  "Records in master" = "Záznamy v masteru", "QC-eligible records" = "Záznamy způsobilé po QC",
+  "Main-visit records (M0-M18)" = "Záznamy hlavních návštěv (M0–M18)", "Patients in main analysis" = "Pacienti v hlavní analýze",
+  "Exploratory records (M30-M60)" = "Exploratorní záznamy (M30–M60)",
+  "Unique patient x visit (record_level)" = "Jedinečná kombinace pacient × návštěva", "QC eligibility" = "Způsobilost po QC",
+  "Main sample (M0-M18)" = "Hlavní vzorek (M0–M18)", "Complete pairs with M0" = "Kompletní páry s M0",
+  "Patients without M0" = "Pacienti bez M0", "Threshold grid complete" = "Úplná mřížka prahů", "Exclusive bins" = "Exkluzivní biny",
+  "Cumulative monotonicity" = "Monotonie kumulativních prahů", "bin = T_lo - T_hi" = "bin = T_dolní − T_horní",
+  "sum(bins) = T20 - T400" = "součet binů = T20 − T400", "minutes_per_10mg consistent" = "minutes_per_10mg konzistentní",
+  "Non-negative bins" = "Nezáporné biny", "Exact zeros vs near-zero in bins" = "Přesné nuly vs téměř nuly v binech",
+  "Valid days (main sample)" = "Validní dny (hlavní vzorek)", "Month/season from start_time" = "Měsíc/sezóna ze start_time",
+  "Subtype coding" = "Kódování podtypů", "Months from M0: median (range)" = "Měsíce od M0: medián (rozsah)", "Season x visit" = "Sezóna × návštěva",
+  "Data integrity checks (D1–D19)" = "Kontroly integrity dat (D1–D19)",
+  "Paired change: cumulative T = sum of bins >= T + (>=400)" = "Párová změna: kumulativní T = součet binů ≥ T + (≥ 400)",
+  "Composition closes to 1440 min (raw and after zero replacement); bins = native GGIR edges" = "Kompozice se uzavírá na 1440 min (surově i po náhradě nul); biny = nativní hrany GGIR",
+  "Reproducibility: same input = same estimates; bootstrap 1 vs N workers identical" = "Reprodukovatelnost: stejný vstup = stejné odhady; bootstrap 1 vs N workerů shodný",
+  "MMRM convergence across bootstrap replicates" = "Konvergence MMRM napříč bootstrapovými replikacemi",
+  "Residual distribution (RI LMM, per bin)" = "Rozdělení reziduí (RI LMM, po binech)",
+  "Leave-one-patient-out influence on E1 (in SE units)" = "Vliv vynechání jednoho pacienta na E1 (v jednotkách SE)",
+  "Matrix E3 engine = est_E3() (observed residuals)" = "Maticový výpočet E3 = est_E3() (pozorovaná rezidua)",
+  "Type-I rate of the bump rule under a true null (nominal <= 5%)" = "Chyba I. druhu pravidla hrbu při skutečném nullu (nominálně ≤ 5 %)",
+  "Exclusive bins reconstructed from cumulative thresholds (D8-D12)" = "Exkluzivní biny rekonstruované z kumulativních prahů (D8–D12)",
+  "Bin widths 10 (20-120), 20 (120-300), 25 (300-400) mg; factor 10/width; normalised = raw x factor" = "Šířky binů 10 (20–120), 20 (120–300), 25 (300–400) mg; faktor 10/šířka; normalizovaná = surová × faktor",
+  "Impossible / non-finite values in revised outputs" = "Nemožné / nekonečné hodnoty v revidovaných výstupech",
+  "Top-10 % shares re-computed independently (base R, master bin_long)" = "Podíly top 10 % přepočítané nezávisle (base R, master bin_long)",
+  "Original C3 estimand reproduced exactly by the revision code" = "Původní estimand C3 přesně reprodukován kódem revize",
+  "clr closure (sum clr = 0), replaced composition = 1440 min, zero handling" = "Uzavření clr (Σ clr = 0), kompozice po náhradě = 1440 min, nuly",
+  "E3 residual invariant to clr centre and to per-10-mg normalisation; same spline basis per visit" = "Reziduum E3 invariantní vůči centru clr a normalizaci na 10 mg; stejná báze splinu u všech návštěv",
+  "Primary E3 simultaneous bands re-derived from saved replicates (base R)" = "Primární simultánní pásy E3 přepočítané z uložených replikací (base R)",
+  "Matrix engine and revision bootstrap reproducible (same seed; 1 vs N workers)" = "Maticový výpočet a bootstrap revize reprodukovatelné (stejný seed; 1 vs N workerů)",
+  "Matrix engine (complete pairs) vs primary bootstrap (all patients): E3 residual and band half-width" = "Maticový bootstrap (kompletní páry) vs primární (všichni pacienti): reziduum E3 a pološířka pásu",
+  "Leave-one-patient-out influence on the new estimands" = "Vliv vynechání jednoho pacienta na nové estimandy",
+  "Subtype models (ph_VAS sample): singular fits and convergence" = "Modely podtypů (vzorek s ph_VAS): singulární fity a konvergence",
+  "Sample sizes unchanged vs the ORIGINAL 01 output (pairs per visit); variants use the same pairs; E linkage (hash is descriptive only)" = "Velikosti vzorků beze změny vůči PŮVODNÍMU výstupu 01 (páry na návštěvu); varianty používají stejné páry; propojení E (hash jen popisný)",
+  "Primary observed estimates (E1-E4, all blocks) reproduce the saved originals" = "Primární pozorované odhady (E1–E4, všechny bloky) reprodukují uložené originály",
+  "Original descriptive outputs reproduced (raw profile 01, C3 04, C1 04)" = "Původní deskriptivní výstupy reprodukovány (surový profil 01, C3 04, C1 04)",
+  "Figure data equal the tabulated results" = "Data figur = tabelované výsledky",
+  "Report statements checked against the results" = "Tvrzení reportu ověřená proti výsledkům",
+  "A: per-10-mg medians decrease monotonically with intensity at every visit" = "A: mediány na 10 mg klesají s intenzitou monotónně při každé návštěvě",
+  "A: the raw profile rises at 120-140 mg at every visit (width artefact)" = "A: surový profil u 120–140 mg při každé návštěvě stoupá (artefakt šířky)",
+  "B: original net share undefined in some low bins and > 100 % in others" = "B: původní podíl na čistém zisku je v některých nízkých binech nedefinovaný a v jiných > 100 %",
+  "B: positive-gain share stays within 0-100 %" = "B: podíl na kladných ziscích zůstává v rozmezí 0–100 %",
+  "C: no bump under any df >= 3, weighted or alternative-grid variant" = "C: žádný hrb při df ≥ 3, váženém fitu ani alternativní mřížce",
+  "C: df 3 type-I rate <= 5 % (MC CI lower bound) at every visit under the df-3 true null" = "C: chyba I. druhu df 3 ≤ 5 % (dolní mez MC IS) při každé návštěvě pod nullem df 3",
+  "D: no Holm-adjusted global shape difference between visits (p >= 0.05)" = "D: žádný globální rozdíl tvaru mezi návštěvami po Holmovi (p ≥ 0,05)",
+  "D: no tilt difference between visits after Holm (p >= 0.05)" = "D: žádný rozdíl sklonu mezi návštěvami po Holmovi (p ≥ 0,05)",
+  "E: no subtype x visit interaction at p < 0.05 (ph_VAS-adjusted, any outcome)" = "E: žádná interakce podtyp × návštěva s p < 0,05 (adjustace na ph_VAS, libovolný výsledek)",
+  "no evidence of a localised departure; smooth redistribution towards higher intensities" = "žádný doklad lokální odchylky; hladká redistribuce k vyšším intenzitám",
+  "no evidence of a localised departure; shape change not identifiable" = "žádný doklad lokální odchylky; změnu tvaru nelze identifikovat",
+  "no localised departure" = "bez lokální odchylky", "bump flagged" = "označen hrb",
+  "primary_epoch" = "primární (epocha)", "zero_0.01" = "nuly 0,01 min/den", "zero_0.5" = "nuly 0,5 min/den",
+  "S7_validdays5" = "S7 ≥ 5 validních dnů", "S8_no_UCTD" = "S8 bez UCTD/SSc",
+  "S1 complete pairs" = "S1 kompletní páry", "S2 random intercept" = "S2 náhodný intercept",
+  "S7 >= 5 valid days" = "S7 ≥ 5 validních dnů", "S8 without UCTD/SSc" = "S8 bez UCTD/SSc",
+  "bins" = "biny", "cumulative" = "kumulativní", "none" = "žádná",
+  "subtype x visit interaction" = "interakce podtyp × návštěva",
+  "any subtype effect (main + interaction)" = "jakýkoli efekt podtypu (hlavní + interakce)",
+  "severity x visit interaction" = "interakce závažnost × návštěva",
+  "severity main effect" = "hlavní efekt závažnosti",
+  "PM / UCTD (excluded)" = "PM / UCTD (vyřazeni)", "All (incl. PM/UCTD)" = "Všichni (vč. PM/UCTD)",
+  "complete ph_vas" = "kompletní ph_VAS", "complete mmt8" = "kompletní MMT8", "all subtype patients" = "všichni pacienti s podtypem"
+)
+# Pattern-based translations (dynamic strings).
+CZ_RX <- list(
+  c("^Pairs with M0: (.*)\\. Cluster bootstrap B = (\\d+)\\.$", "Páry s M0: \\1. Pacientský cluster bootstrap, B = \\2."),
+  c("^pairs: ", "páry: "),
+  c("^Undefined \\(net change <= 0, not plotted\\): ", "Nedefinováno (čistá změna ≤ 0, nevykresleno): "),
+  c("^Power of E3 bump rule, true-null plasmode", "Síla pravidla hrbu E3, plasmode se skutečným nullem"),
+  c("^null \\(true null\\)$", "null (skutečný null)"),
+  c("^Any bump flagged, true smooth df = ", "Jakýkoli hrb, skutečný hladký průběh df = "),
+  c("^Detected: ", "Detekce: "),
+  c("6 bins ", "6 binů "), c("([234]) bins ", "\\1 biny "),
+  c("(M\\d+) minus (M\\d+)", "\\1 − \\2"),
+  c("\\+0\\.(\\d)", "+0,\\1"), c("(\\d+)-(\\d+), \\+", "\\1–\\2, +")
+)
+tr1 <- function(y) {
+  hit <- !is.na(y) & y %in% names(CZ); y[hit] <- unname(CZ[y[hit]])
+  for (r in CZ_RX) y <- gsub(r[1], r[2], y)
+  y
+}
+tr <- function(x) {                                   # multi-line strings are translated line by line
+  if (is.null(x)) return(x)
+  y <- as.character(x)
+  vapply(y, \(z) if (is.na(z)) NA_character_ else paste(tr1(strsplit(z, "\n", fixed = TRUE)[[1]]), collapse = "\n"),
+         character(1), USE.NAMES = FALSE)
+}
+tr_df <- function(d) {
+  if (!is.data.frame(d)) return(d)
+  for (v in setdiff(names(d), c("patient_id", "descriptor"))) {
+    x <- d[[v]]
+    if (is.factor(x)) levels(x) <- tr(levels(x))
+    else if (is.character(x)) x <- factor(tr(x), levels = unique(tr(sort(unique(x)))))
+    d[[v]] <- x
+  }
+  d
+}
+cz_plot <- function(p) {
+  if (inherits(p, "patchwork")) {
+    for (i in seq_along(p)) p[[i]] <- cz_plot(p[[i]])
+    ann <- p$patches$annotation
+    if (!is.null(ann$caption)) p <- p + patchwork::plot_annotation(caption = tr(ann$caption))
+    return(p)
+  }
+  labs_now <- p$labels
+  labs_new <- lapply(labs_now[vapply(labs_now, is.character, logical(1))], tr)
+  p <- p + do.call(ggplot2::labs, labs_new)
+  p$data <- tr_df(p$data)
+  for (i in seq_along(p$layers)) if (is.data.frame(p$layers[[i]]$data)) p$layers[[i]]$data <- tr_df(p$layers[[i]]$data)
+  p
+}
+# Figure-specific fixes after translation (manual scales keyed by translated values; text labels built in aes()).
+cz_fix <- function(p, name) {
+  if (name == "F5_confidence_sets")
+    p <- p + scale_fill_manual(values = setNames(c("grey15", "grey65", "white"),
+                                                 tr(c("inner set (certainly > 0)", "outer set only (plausibly > 0)", "not in set"))))
+  if (name == "B2")
+    p <- p + scale_shape_manual(values = setNames(c(16, 4), tr(c("interpretable", "unstable (net/gross < 0.20)"))))
+  if (name == "D1") {
+    k <- which(vapply(p[[2]]$layers, \(l) inherits(l$geom, "GeomText"), logical(1)))
+    for (j in k) p[[2]]$layers[[j]]$mapping$label <- rlang::quo(sprintf(
+      "n = %d; rozdíl sklonu %s (%s až %s); hladká křivka 3 df p = %s (Holm %s)", n_patients,
+      formatC(slope_diff, format = "f", digits = 2), formatC(slope_ci_low, format = "f", digits = 2),
+      formatC(slope_ci_high, format = "f", digits = 2), formatC(p_wald_boot, format = "f", digits = 2),
+      formatC(p_wald_boot_holm, format = "f", digits = 2)))
+  }
+  p
+}
+
+# Small presentation helpers (formatting only; no computation of results).
+kbl_house <- function(df, caption, digits = 2) {
+  knitr::kable(df, caption = caption, digits = digits, align = c("l", rep("c", ncol(df) - 1)),
+               format.args = list(decimal.mark = ",")) |>
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) |>
+    kableExtra::column_spec(1, bold = TRUE)
+}
+fmt <- function(x, d = 2) formatC(x, format = "f", digits = d, decimal.mark = ",")
+has <- function(x) exists(x, envir = .GlobalEnv)
+show_fig <- function(name) {
+  if (has("figure_objects") && !is.null(figure_objects[[name]])) print(cz_fix(cz_plot(figure_objects[[name]]), name))
+  else cat("*Figura není k dispozici — nejdřív spusťte 05_FIGURES_TABLES_BOTH.R.*\n")
+}
+show_rev <- function(obj, name) {
+  if (has(obj) && !is.null(get(obj, envir = .GlobalEnv)$figs[[name]]))
+    print(cz_fix(cz_plot(get(obj, envir = .GlobalEnv)$figs[[name]]), name))
+  else cat("*Figura není k dispozici — nejdřív spusťte skripty revize 07–09.*\n")
+}
+
+# Inline value helpers for the explanatory text (read saved objects; '[n/a]' if missing).
+NA_TXT <- "[n/a]"
+row_of <- function(est, blk, vis, desc) {
+  if (!has("primary_objects")) return(NULL)
+  r <- primary_objects$summary[primary_objects$summary$estimand == est & primary_objects$summary$block == blk &
+                               as.character(primary_objects$summary$visit) == vis & primary_objects$summary$descriptor == desc, ]
+  if (nrow(r) == 1) r else NULL
+}
+ev <- function(est, blk, vis, desc, d = 1, ci = TRUE) {      # estimate (95% IS); E2 on ratio scale
+  r <- row_of(est, blk, vis, desc); if (is.null(r)) return(NA_TXT)
+  f <- if (grepl("^E2", est)) exp else identity
+  if (!ci) return(fmt(f(r$estimate), d))
+  sprintf("%s (95%% IS %s až %s)", fmt(f(r$estimate), d), fmt(f(r$ci_low), d), fmt(f(r$ci_high), d))
+}
+pct_more <- function(vis, desc, blk = "cumulative") {         # ratio -> "+x %"
+  r <- row_of("E2", blk, vis, desc); if (is.null(r)) return(NA_TXT)
+  sprintf("%+.0f %%", 100 * (exp(r$estimate) - 1))
+}
+dv <- function(obj, path, filt, col, d = 0, scale = 1) {     # generic descriptive lookup
+  if (!has(obj)) return(NA_TXT)
+  x <- get(obj, envir = .GlobalEnv)[[path]]
+  for (k in names(filt)) x <- x[as.character(x[[k]]) == filt[[k]], , drop = FALSE]
+  if (nrow(x) != 1) return(NA_TXT)
+  fmt(scale * x[[col]], d)
+}
+pow_range <- function(scn) {                                  # detection % range over visits
+  if (!has("validation_objects") || !"n_bins" %in% names(validation_objects$power_summary)) return(NA_TXT)
+  x <- validation_objects$power_summary; v <- x$pct_detected[as.character(x$scenario) == scn]
+  if (!length(v)) return(NA_TXT)
+  if (length(unique(round(v))) == 1) fmt(v[1], 0) else paste0(fmt(min(v), 0), "–", fmt(max(v), 0))
+}
+sim_txt <- function() {
+  if (!has("validation_objects")) return(NA_TXT)
+  s <- validation_objects$settings; sprintf("%d souborů × %d bootstrapových replikací na scénář a návštěvu", s$N_SIM, s$B_SIM)
+}
+tip_lo <- function(blk, desc, raw = FALSE) {                   # delta at which the M18 lower 95% bound reaches 0
+  r <- row_of("E1", blk, "M18", desc)
+  if (is.null(r) || !has("sensitivity_objects")) return(if (raw) NA_real_ else NA_TXT)
+  s9 <- sensitivity_objects$s9; s9 <- s9[s9$block == blk & s9$descriptor == desc, ][1, ]
+  v <- r$ci_low / (s9$n_m18_imputed / s9$n_with_m0)
+  if (raw) v else fmt(v, 1)
+}
+null_txt <- function() {
+  if (!has("validation_objects") || !"any_bump_mc95" %in% names(validation_objects$power_summary)) return(NA_TXT)
+  x <- validation_objects$power_summary; x <- x[as.character(x$scenario) == "null (true null)", ]
+  paste(sprintf("%s %s %% (MC 95%% IS %s %%)", x$visit, fmt(x$pct_any_bump, 1), x$any_bump_mc95), collapse = "; ")
+}
+conc_v <- function(vis, desc, col, d = 0, set = NULL) {      # value from the revised concentration table
+  if (!has("rev_AB_objects")) return(NA_TXT)
+  x <- rev_AB_objects$conc; x <- x[as.character(x$visit) == vis & x$descriptor == desc, , drop = FALSE]
+  if (!is.null(set)) x <- x[x$set == set, , drop = FALSE]
+  if (nrow(x) != 1 || !is.finite(x[[col]])) return(NA_TXT)
+  fmt(x[[col]], d)
+}
+conc_ci <- function(vis, desc, col, d = 0) {                  # "x (95% IS a–b)"
+  if (!has("rev_AB_objects")) return(NA_TXT)
+  sprintf("%s (95%% IS %s–%s)", conc_v(vis, desc, col, d), conc_v(vis, desc, paste0(col, "_ci_low"), d),
+          conc_v(vis, desc, paste0(col, "_ci_high"), d))
+}
+conc_range <- function(col, lo, hi, d = 0) {                  # range over bins with lo <= lower_mg < hi, all visits
+  if (!has("rev_AB_objects")) return(NA_TXT)
+  x <- rev_AB_objects$conc; v <- x[[col]][x$set == "bin" & x$lower_mg >= lo & x$lower_mg < hi]
+  v <- v[is.finite(v)]; if (!length(v)) return(NA_TXT)
+  paste0(fmt(min(v), d), "–", fmt(max(v), d))
+}
+shape_v <- function(contrast, col, d = 2, sample = "all") {
+  if (!has("rev_CD_objects")) return(NA_TXT)
+  x <- rev_CD_objects$shape_summary; x <- x[x$contrast == contrast & grepl(paste0("^", sample), x$sample), ]
+  if (nrow(x) != 1) return(NA_TXT)
+  fmt(x[[col]], d)
+}
+ev_rev <- function(outcome, model, severity, sample, visit, contrast, d = 2) {   # model contrast with IS
+  if (!has("rev_E_objects")) return(NA_TXT)
+  x <- rev_E_objects$models
+  x <- x[as.character(x$outcome) == outcome & x$model == model & x$severity == severity & x$sample == sample &
+         x$visit == visit & x$contrast == contrast, ]
+  if (nrow(x) != 1) return(NA_TXT)
+  sprintf("%s (95%% IS %s až %s)", fmt(x$estimate, d), fmt(x$ci_low, d), fmt(x$ci_high, d))
+}
+lrt_p <- function(outcome, severity, test, d = 3) {
+  if (!has("rev_E_objects")) return(NA_TXT)
+  x <- rev_E_objects$lrt; v <- x$p[x$outcome == outcome & x$severity == severity & x$test == test]
+  if (length(v) != 1) return(NA_TXT); fmt(v, d)
+}
+dfsim <- function(scn, df_true, df_test, col = "pct_any_bump", visits = c("M3", "M6", "M18"), d = 1, sep = "; ") {
+  if (!has("rev_CD_objects")) return(NA_TXT)
+  x <- rev_CD_objects$df_sim_summary
+  x <- x[x$scenario == scn & x$df_true == df_true & x$df_test == df_test & x$visit %in% visits, ]
+  paste(sprintf("%s %s %%", x$visit, fmt(x[[col]], d)), collapse = sep)
+}
+claim_ok <- function(pattern) {                                # statement check from 10_REV_VALIDATION
+  if (!has("rev_validation_objects")) return(NA)
+  x <- rev_validation_objects$claims; isTRUE(all(x$holds[grepl(pattern, x$claim, fixed = TRUE)]))
+}
+inner_set <- function(est, blk, vis, delta = 0) {
+  if (!has("primary_objects")) return(NA_TXT)
+  x <- primary_objects$conf_sets
+  x <- x[x$estimand == est & x$block == blk & as.character(x$visit) == vis & abs(x$delta - delta) < 1e-6, ]
+  if (nrow(x) == 1) paste(gsub("-", "–", x$inner_set), "mg") else NA_TXT
+}
+```
+
+# Souhrn
+
+```{r exec_summary, results='asis'}
+if (has("sensitivity_objects")) {
+  fv <- sensitivity_objects$final_verdict
+  cat('<div class="finding-box">\n\n**Předem stanovený verdikt lokalizace (E3, ověřená invariance):**\n\n')
+  for (i in seq_len(nrow(fv))) cat(sprintf("- **%s:** %s\n", fv$visit[i], tr(fv$final[i])))
+  cat("\n</div>\n")
+} else cat("*Výsledky nejsou k dispozici — nejdřív spusťte analytické skripty.*\n")
+```
+
+```{r exec_sets}
+if (has("primary_objects")) {
+  primary_objects$conf_sets |>
+    dplyr::filter(delta == 0) |>
+    dplyr::transmute(Estimand = paste(estimand, tr(block)), `Návštěva` = visit,
+                     `Vnitřní množina (jistě > 0)` = tr(gsub("-", "–", inner_set)),
+                     `Vnější množina (možná > 0)` = tr(gsub("-", "–", outer_set))) |>
+    kbl_house("Kde leží změna? Simultánní 95% konfidenční množiny pro {změna > 0} (mg)")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="warning-box">
+
+**Pozor:** Simultánní pásy, ze kterých tyto množiny vycházejí, nejsou kalibrované pro každý bin zvlášť. Simulace se skutečným nullem kalibruje jen pravidlo „hrbu“ o ≥ 2 binech. Množiny pro M18 (n = 39) berte se zvláštní opatrností.
+
+</div>
+
+## Klíčová sdělení pro klinického čtenáře {.unnumbered}
+
+<div class="note-box">
+
+Sdělení popisují ostrý běh z 2026-10-14 (B = 2000; md5 masteru je v příloze o reprodukovatelnosti), revidovaný 2026-10-16 (A07; skripty 07–10, B = 2000). Sdělení 4–6 se v revizi změnila, sdělení 1–3 a 7 zůstala beze změny.
+
+- Odhady, intervaly spolehlivosti (IS), rozsahy a procenta se do textu dosazují z uložených výsledků při renderování reportu.
+- Slovní formulace byly zkontrolovány proti tomuto běhu. Pokud se analýza spustí nad jiným vstupem, je nutné ověřit, že formulace stále odpovídají číslům.
+
+</div>
+
+1. **Pacienti jsou zřetelně aktivnější a zisk trvá i v M18.**
+   - Čas nad 100 mg vzrostl o `r ev("E1","cumulative","M3","T100")` min/den v M3 a o `r ev("E1","cumulative","M6","T100")` min/den v M6.
+   - V M18 byl stále vyšší o `r ev("E1","cumulative","M18","T100")` min/den. Odhad pro M18 předpokládá chybění náhodné vzhledem k pozorovaným datům (MAR) a výpadek do M18 je informativní (viz analýza tipping point).
+   - Výchozí medián byl `r dv("qc_objects","profiles",list(kind="cumulative",visit_code="M0",descriptor="T100"),"median")` min/den, relativní nárůsty tedy činí `r pct_more("M3","T100")`, `r pct_more("M6","T100")` a `r pct_more("M18","T100")`.
+
+2. **Žádný doklad, že by změnu neslo konkrétní pásmo intenzity.** Denní rozdělení intenzit se plynule naklápí k vyšším zrychlením:
+   - podíl dne pod 20 mg klesá;
+   - biny nízké intenzity (pod ~100 mg) ztrácejí relativní podíl;
+   - biny vyšší intenzity relativní podíl získávají, a to tím více, čím vyšší je intenzita.
+
+   Předem stanovený test tvaru nenašel lokální odchylku při žádné návštěvě a výsledek se nezměnil v žádné kontrole invariance.
+
+   Co test vidí a co ne (simulace se skutečným nullem, `r sim_txt()`):
+   - Falešné poplachy při skutečném nullu jsou vzácné: `r null_txt()`.
+   - Lokální zisk navíc o zhruba +22 % by byl s velkou pravděpodobností odhalen, úzký i široký: `r pow_range("2 bins 120-160, +0.2")` % pro 2 biny v 120–160 mg a `r pow_range("6 bins 70-140, +0.2")` % pro 6 binů v 70–140 mg.
+   - Menší zisk navíc (+10 %) mohl uniknout, zejména v M18: detekce byla `r pow_range("2 bins 120-160, +0.1")` % pro 2 biny a `r pow_range("6 bins 70-140, +0.1")` % pro 6 binů. Malé široké odchylky mohou být označeny na nesprávném místě.
+
+3. **Kde přibývají minuty a kde je největší relativní změna, jsou různá místa.**
+   - *Absolutní* zisk je jistě kladný zhruba od 80–90 mg výše a v minutách je největší do ~140 mg, kde se odehrává většina aktivního času.
+   - Podobně velké bodové odhady pod 80 mg jsou příliš nepřesné, aby se daly odlišit od nuly.
+   - *Relativní* nárůst je největší ve vysokých intenzitách, např. ×`r ev("E2","bins","M3","300-325",2,FALSE)` v 300–325 mg v M3. V absolutních číslech jde o zlomky minuty denně.
+
+4. **Časná a pozdější kontrola se možná liší (hypotéza).**
+   - V M3 je relativní zisk v nejvyšších intenzitách největší: ×`r ev("E2","bins","M3","375-400",2,FALSE)` v 375–400 mg. V M6 a M18 je menší (×`r ev("E2","bins","M6","375-400",2,FALSE)` a ×`r ev("E2","bins","M18","375-400",2,FALSE)`).
+   - To je slučitelné s časným „výbuchem“ intenzivnějšího pohybu, který se později ustálí do nárůstu ve středním pásmu.
+   - Jde o hypotézu ze tří důvodů:
+     - formální párová srovnání tvaru změny (nově v A07) nenacházejí rozdíl sklonu mezi žádnými návštěvami. Celkový tvar se nominálně liší jen mezi M6 a M3 (p = `r shape_v("M6 minus M3","p_wald_boot",3)`), po Holmově korekci už ne (`r shape_v("M6 minus M3","p_wald_boot_holm",3)`);
+     - M3 a M6 se časově překrývají (2–6 vs 5–9 měsíců);
+     - návštěvy se liší sezónním kontrastem (žádný pár M0→M6 nespadá do stejné sezóny).
+
+5. **Změna je široká co do směru, ale nerovnoměrná co do velikosti (revize A07).**
+   - Od 70 mg výše získává čas v daném binu `r conc_range("pct_positive", 70, 400)` % pacientů; v nejnižších binech zhruba polovina.
+   - 10 % pacientů s největšími zisky přispívá `r conc_range("share_pos", 60, 400)` % všech *kladných* zisků od 60 mg výše (minimum možné hodnoty, kdyby byly všechny zisky stejné, je zhruba 13–21 %). Koncentrace je v celém spektru podobně velká. V M3 je nad ~240 mg numericky vyšší, ale intervaly se překrývají a formálně to testováno nebylo.
+   - Číslo z prvního reportu „46–75 % celkového zisku nad 200 mg“ používalo jako jmenovatel *čistý* zisk. Nad 200 mg dává hodnoty jen mírně vyšší než podíl na kladných ziscích, ale tam, kde se zisky a ztráty vyruší, je čistý estimand nedefinovaný nebo přesahuje 100 % (až `r if (has("rev_AB_objects")) fmt(max(rev_AB_objects$conc$share_net_orig, na.rm = TRUE), 0) else NA_TXT` %). Hlavním měřítkem heterogenity je proto nyní podíl na kladných ziscích.
+
+6. **Podtypy (exploratorně; adjustované modely doplněny v A07).**
+   - IMNM získává méně času nad 100 mg než DM (`r ev_rev("dT100","E_b_sev","ph_vas","complete ph_vas","mean M3-M18","IMNM - DM",1)` min/den v průměru přes návštěvy, s adjustací na ph_VAS). Adjustace na výchozí svalovou sílu (MMT8) bodový odhad u týchž pacientů téměř nemění (`r ev_rev("dT100","E_a_unadjusted","mmt8","complete mmt8","mean M3-M18","IMNM - DM",1)` bez adjustace vs `r ev_rev("dT100","E_b_sev","mmt8","complete mmt8","mean M3-M18","IMNM - DM",1)` s adjustací), interval se ale rozšíří přes 0. MMT8 samo se změnou T100 nesouvisí.
+   - Pro rozdíl podtypů v *tvaru* změny (sklon, ΔIG) doklad není, intervaly jsou ale široké.
+   - ph_VAS je u DM a ASyS z podstatné části určené extramuskulární aktivitou, u IMNM téměř čistě svalovou. Jako adjustace na výchozí svalové postižení je proto nedokonalé.
+   - Při 12–18 párech na podtyp a návštěvu a bez korekce na multiplicitu jde o hypotézy pro dostatečně silnou studii.
+
+7. **Praktický důsledek.**
+   - Data **nepodporují nový prahový bod specifický pro IIM**.
+   - Objem změny popisují čas nad konvenčním prahem (např. 100 mg) a průměrné ENMO.
+   - Intenzitní gradient (IG) je blízce příbuzný souhrn naklopení bez prahového bodu. Naklopení na úrovni pacienta sleduje jen středně (ρ ≈ `r dv("descriptive_objects","c5",list(visit="M6"),"spearman_slope_vs_d_ig",2)` v M6) a jeho průběh na úrovni skupiny se liší, je to tedy rozumný, ale ne rovnocenný souhrn.
+
+
+<div class="note-box">
+
+**Jak report číst.**
+
+- Tři otázky se zodpovídají odděleně, každá vlastním předem stanoveným estimandem:
+  - **E1:** kde přibývá čas, v absolutních minutách/den na 10 mg;
+  - **E2:** kde je relativní nárůst největší, jako poměr průměrů;
+  - **E3:** zda se mění *tvar* rozdělení intenzit nad rámec hladkého posunu.
+- Jen E3 může podložit tvrzení o konkrétním informativním intervalu.
+- Poloha maxima závisí na estimandu, maxima se proto neprezentují jako prahové body.
+
+</div>
+
+---
+
+# Revize A07: co se změnilo {.tabset}
+
+## Souhrn {.unnumbered}
+
+<div class="note-box">
+
+Revize zpracovala pět návrhů (A–E) z `MYO_A07_narhy_na_zmeny.txt`. U každého se nejdřív posoudilo, zda je statisticky opodstatněný; rozhodnutí jsou v `docs/261016_A07_critical_review.md`.
+
+- **Beze změny:** primární analýza, její estimandy (E1–E4), populace, prahy, definice binů, modely a všechna jejich čísla. Validační skript je reprodukuje s přesností 10⁻⁶ (R9).
+- **Změněno:** figura popisného profilu (A), estimand heterogenity a jeho interpretace (B) a výklad figury tvaru (C).
+- **Doplněno:** kontroly robustnosti testu tvaru (C), párová srovnání návštěv (D) a exploratorní modely podtypů adjustované na závažnost s klinickými daty mimo master (E).
+
+</div>
+
+```{r tab_changelog}
+tibble::tribble(
+  ~`Položka`, ~Typ, ~`Co se změnilo`, ~`Vliv na závěry`,
+  "Popisný profil (BINY)", "figura nahrazena", "osa y = min/den na 10 mg místo surových min/den v binu; původní figura ponechána jako panel A srovnání", "zdánlivý lokální vrchol 120–140 mg mizí; profil je monotónní",
+  "F6 heterogenita", "nový estimand, nová figura", "koncentrace kladných zisků (s minimem při stejných ziscích a IS); index net/gross; panely nízké/vysoké intenzity; původní podíl na čistém zisku zvlášť s označením nestabilních buněk", "„menšina silných responderů ve vysokých intenzitách“ nahrazeno „široká co do směru, nerovnoměrná co do velikosti v podobné míře v celém spektru“",
+  "Klíčové sdělení 5, H3", "text revidován", "nový estimand a formulace", "viz F6",
+  "F3 (tvar E3)", "figura překreslena, text revidován", "zobrazena hladká křivka každé návštěvy; výklad panelů A/B a kritéria odchylky vypsána; čísla totožná", "žádný",
+  "Robustnost E3", "doplněná analýza", "df 1–5, fit vážený šířkou, mřížka 20 mg, biny do 400 mg; důkaz invariance; plasmode pro df", "„bez lokální odchylky“ platí pro df 3, 4 i 5, vážený fit a obě alternativní mřížky",
+  "Tvar mezi návštěvami", "doplněná analýza", "párové testy sklonu a hladké křivky (3 df) M3/M6/M18, Holm; společný vzorek; tabulka časování a sezóny", "rozdíl časné vs pozdější fáze statisticky nepodložen (H4 zůstává hypotézou)",
+  "Klíčové sdělení 4, H4", "text revidován", "odkaz na formální testy", "opatrnější formulace",
+  "Podtypy", "doplněná analýza (exploratorní)", "modely ΔT100, sklonu a ΔIG s adjustací na ph_VAS (hlavní) / MMT8; kontrola konstruktu a kolinearity; F7 beze změny; doplněna F7b", "IMNM menší objemový zisk (MMT8 ho nevysvětluje, IS širší); doklad rozdílu tvaru chybí; doplněna H5",
+  "Validace", "doplněna", "skript 10 (R1–R10)", "viz záložka validace"
+) |> kbl_house("Přehled změn revize A07")
+```
+
+---
+
+# Výzkumné otázky a estimandy
+
+| Kód | Otázka | Estimand | Analyzovaný soubor |
+|---|---|---|---|
+| E1 | Kde ve spektru přibývá čas? | Δ průměrných min/den na 10 mg, Mx − M0 (MMRM, nestrukturovaná kovariance) | všechna měření (MAR) |
+| E2 | Kde je relativní změna největší? | poměr marginálních průměrů Mx/M0 ze stejného MMRM | všechna měření (MAR) |
+| E3 | Mění se tvar nad rámec hladkého posunu? | průměrná párová změna clr 21dílné 24h kompozice; reziduum od nullu z přirozeného splinu v log intenzitě | kompletní páry |
+| E4 | Je změna velká vzhledem ke své variabilitě? | dz = průměrná Δ / SD(Δ) | kompletní páry |
+| CUM | Doplňková, překrývající se reprezentace | E1/E2 pro 24 kumulativních prahů | všechna měření |
+
+Z těchto dat lze odhadnout:
+
+- změnu na úrovni skupiny (E1/E2);
+- přesnost změny na úrovni skupiny (bootstrapová SE);
+- prevalenci expozice (pokrytí).
+
+Z master datasetu **nelze odhadnout**:
+
+- individuální test-retest reliabilitu (ICC/SEM/SDC); k té jsou potřeba denní výstupy GGIR (`part2_daysummary`);
+- klinickou prediktivní hodnotu, která je mimo rozsah práce.
+
+---
+
+# Zdroj dat, kohorta, QC a chybějící data
+
+```{r flow}
+if (has("qc_objects")) {
+  qc_objects$flow |> dplyr::transmute(Krok = tr(step), n) |> kbl_house("Tok kohortou", 0)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Kolik záznamů a pacientů vstupuje do analýzy.
+
+- Všechny záznamy prošly QC přístroje včetně kalibrační chyby pod 0,01 g.
+- Hlavní analýza používá návštěvy M0–M18. M30–M60 se ukazují jen deskriptivně, protože obsahují málo pacientů.
+
+</div>
+
+
+```{r qc_table}
+if (has("qc_objects")) {
+  qc_objects$qc_table |> dplyr::transmute(ID = id, Kontrola = tr(check), Stav = status, `Detail (technický výpis)` = detail) |>
+    kbl_house("Kontroly integrity master datasetu (PASS / WARN / FAIL / INFO)")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Jak číst.**
+
+- Každý řádek je automatická kontrola konzistence master datasetu.
+- **PASS** znamená, že data splňují očekávanou aritmetiku. Například čas v exkluzivním binu se rovná rozdílu dvou sousedních kumulativních prahů a čas nad vyšším prahem nikdy nepřesáhne čas nad nižším.
+- **WARN** označuje vlastnosti, které data nezneplatňují, ale je třeba je zohlednit při interpretaci: pacienti bez výchozího měření, záznamy s méně než 5 validními dny, překrývající se časová okna M3/M6 a nedefinované kódy podtypů.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.** Žádný výsledek FAIL, data jsou tedy vnitřně konzistentní a odvozené exkluzivní biny jsou přesné.
+
+**Klinicky významné WARN: časování návštěv.**
+
+- M3 byla zaznamenána 2–6 měsíců po M0 a M6 4–9 měsíců po M0, obě okna se tedy částečně překrývají.
+- Rozdíly „M3 vs M6“ je proto třeba číst jako *časná vs pozdější kontrola*, ne jako přesné časové body 3 a 6 měsíců.
+- Citlivostní analýza se skutečným časem od výchozího měření dala stejný obraz.
+
+</div>
+
+
+```{r patterns}
+if (has("qc_objects")) {
+  kbl_house(qc_objects$visit_patterns |> dplyr::rename(`Vzorec návštěv` = pattern, Pacienti = n_patients),
+            "Pozorované vzorce návštěv (hlavní návštěvy)", 0)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Které návštěvy každý pacient absolvoval. Všechny čtyři hlavní návštěvy má jen zhruba polovina pacientů.
+
+**Proč na tom záleží.** Smíšený model (MMRM) využívá každé dostupné měření a zůstává platný, pokud chybění závisí na tom, co už bylo pozorováno (MAR). Jednodušší párová srovnání (M0 vs Mx) používají jen pacienty s oběma návštěvami.
+
+</div>
+
+
+```{r fig_desc, fig.width=11, fig.height=7}
+show_rev("rev_AB_objects", "A1")
+```
+
+<div class="note-box">
+
+**Co ukazuje (revize, A07-A).**
+
+- Denní profil intenzity **na 10 mg šířky binu**: medián minut za den na 10 mg v každém exkluzivním binu (čára) a rozsah 10.–90. percentilu (pás), zvlášť pro každou návštěvu.
+- Každý záznam se před sumarizací normalizuje (minuty v binu × 10 / šířka binu). Nativní biny GGIR mají šířku 10 mg do 120 mg, 20 mg do 300 mg a 25 mg do 400 mg (tečkované čáry).
+- Osa y je stlačená (log 1 + x), aby několik minut ve vysoké intenzitě zůstalo vidět vedle hodin v nízké intenzitě.
+
+</div>
+
+```{r fig_desc_compare, fig.width=14, fig.height=7}
+show_rev("rev_AB_objects", "A2")
+```
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Původní figura (panel A, beze změny z prvního reportu) zobrazovala minuty *v binech* nestejné šířky. Její lokální vzestup u 120–140 mg vzniká výhradně zdvojnásobením šířky binu z 10 na 20 mg. Surový medián u 120–140 mg stoupá při každé návštěvě (`r if (isTRUE(claim_ok("raw profile rises"))) "ověřeno" else "[ověřit]"`).
+- Po normalizaci (panel B) medián **s intenzitou monotónně klesá při každé návštěvě** (`r if (isTRUE(claim_ok("decrease monotonically"))) "mezi žádnými sousedními biny nestoupá" else "[ověřit]"`). Lokální vrchol neexistuje.
+- Změnu tvaru plně vysvětluje normalizační faktor. Normalizované kvantily se v každém binu a návštěvě rovnají surovým kvantilům × 10 / šířka a surové hodnoty přesně reprodukují původní tabulku (validace R2, R9b).
+- Čas s intenzitou strmě klesá: většina dne připadá na hodnoty pod 100 mg a nad ~250 mg typický pacient nasbírá výrazně méně než minutu denně na 10 mg.
+- Křivky kontrol (M3, M6, M18) leží zhruba od 70 mg výše mírně, ale soustavně nad výchozí křivkou (M0, čerchovaná). To předjímá hlavní výsledek: široký posun nahoru místo jediného vrcholu.
+
+</div>
+
+
+<div class="warning-box">
+
+**Pozor:** Chybějící návštěvy nechybí zcela náhodně.
+
+- Pacienti, kterým později chybí M18, měli spíše větší zisky v M3 (S10).
+- E1/E2 proto používají MMRM, který je platný při MAR. Odhad pro M18 je navíc zátěžově testován analýzou tipping point s delta-adjustací (S9).
+- Důvody chybění M0/M18 v master datasetu zaznamenány nejsou.
+
+</div>
+
+---
+
+# Statistické metody, alternativní modely a nezávislá oponentura {.tabset}
+
+## Modely {.unnumbered}
+
+**E1 a E2.** Pro každý exkluzivní bin a zvlášť pro každý kumulativní práh se minuty/den modelují smíšeným modelem pro opakovaná měření:
+
+- návštěva (M0, M3, M6, M18) je pevný faktor s nestrukturovanou kovariancí na úrovni pacienta (glmmTMB, REML);
+- výsledek se kvůli numerické stabilitě škáluje svou SD a zpětně transformuje.
+
+E1 je kontrast návštěv v min/den na 10 mg šířky binu. E2 je poměr modelových marginálních průměrů (β₀ + βₓ)/β₀. Pokud nestrukturovaný model nekonverguje, použije se model s náhodným interceptem; tyto náhrady se zaznamenávají.
+
+**E3.** Každý záznam je reprezentován jako 21dílná 24h kompozice: <20 mg, 19 binů od 20 do 300 mg a ≥300 mg. Nuly se nahrazují multiplikativně hodnotou 0,65 × jedna 5s epocha na záznam. Analýza pak probíhá ve třech krocích:
+
+1. Pro každou část se spočítají průměrné párové změny centrovaných log-poměrů (clr).
+2. Pro ohraničené biny se tyto změny regresují na log geometrického středu intenzity přirozeným splinem (df = 3), který slouží jako hladký null.
+3. Rezidua jsou estimandem odchylky tvaru.
+
+**Nejistota.** Všechny intervaly poskytuje pacientský cluster bootstrap:
+
+- jedna sada výběrů pacientů je společná všem estimandům, binům, prahům i návštěvám;
+- duplikovaní pacienti dostávají nová ID clusteru a výběry jsou generované předem, takže výsledky nezávisí na počtu workerů.
+
+Report z bootstrapu ukazuje bodové percentilové intervaly a simultánní 95% pásy (max-t přes biny jedné návštěvy). Z pásů jsou odvozeny vnitřní a vnější konfidenční množiny.
+
+## Rozhodovací pravidlo {.unnumbered}
+
+**Lokalizovaný informativní interval** se reportuje, jen když platí obojí:
+
+- rezidua E3 ukazují *hrb*: alespoň 2 sousední biny, jejichž simultánní pás vylučuje nulu, z obou stran ohraničené biny, u kterých to neplatí, a nedotýkající se okraje mřížky;
+- hrb je invariantní vůči hodnotě náhrady nul (epocha, 0,01, 0,5 min/den), omezení na ≥ 5 validních dnů a vyřazení pacienta s UCTD/SSc.
+
+Jinak report uvádí, že **neexistuje doklad lokální odchylky**. Doplní buď, že změna je hladkou redistribucí k vyšším intenzitám (když je lineární sklon nenulový), nebo že změnu tvaru nelze identifikovat.
+
+Pokrytí a velikost změny se reportují jako samostatné deskriptivní dimenze, ne jako brány.
+
+## Nezávislá oponentura {.unnumbered}
+
+Plán oponoval jiný model (Claude Fable 5.1). Proběhla dvě kola, obě s verdiktem REVISE, a každá námitka byla vypořádána:
+
+- úplná oponentura: `docs/261013_phase3_independent_review.md`;
+- vypořádání bod po bodu a uzamčený plán v2: `docs/261013_phase3_disposition_and_locked_plan.md`.
+
+Hlavní změny:
+
+- tvrzení, že odpověď ve vysokých intenzitách je artefakt SD, bylo staženo;
+- E1 bylo normalizováno na 10 mg;
+- E2 bylo převedeno na MAR;
+- byl zaveden estimand tvaru E3 s hladkým nullem;
+- branové rozhodovací pravidlo nahradily konfidenční množiny;
+- posuvná okna byla vypuštěna.
+
+## Revize A07 {.unnumbered}
+
+*Nezávislá oponentura revize:* Claude Fable 5.1, verdikt MINOR REVISION (žádné kritické nálezy; tři hlavní nálezy k interpretaci, všechny vypořádány). Viz `docs/261016_A07_independent_review.md` a vypořádání v `docs/261016_A07_validation_change_log_summary.md` §5.
+
+Revize vychází z `MYO_A07_narhy_na_zmeny.txt`. Úplné posouzení bod po bodu (přijato / upraveno / zamítnuto, se zdůvodněním) je v `docs/261016_A07_critical_review.md`. Původní skripty 01–06 i původní report jsou beze změny; revize přidává skripty 07–10.
+
+**A — Popisný profil na 10 mg.** Minuty každého záznamu v binu se násobí 10 / šířka binu (10, 20 nebo 25 mg) *před* výpočtem mediánu a P10–P90. Protože je šířka v rámci binu konstantní, je to numericky totožné s přeškálováním souhrnů; žádné syntetické 10mg biny se neinterpolují.
+
+**B — Koncentrace změny.** V každém binu a návštěvě (kompletní páry) jsou „top 10 %“ k = ceiling(0,1 × n) pacientů s největší změnou, kde n zahrnuje *všechny* páry buňky. Reportují se tři různé veličiny:
+
+- **% pacientů se ziskem** (změna > 0);
+- **koncentrace kladných zisků** (nová): součet k největších *kladných* zisků dělený součtem všech kladných zisků. Při stejných ziscích by měla hodnotu min(k, n₊)/n₊, což je zároveň její minimum;
+- **podíl na čistém zisku** (původní): součet k největších změn dělený součtem všech změn. Při čisté změně ≤ 0 je nedefinovaný a při téměř vyrušených ziscích a ztrátách nestabilní, proto se uvádí spolu s *indexem net/gross* Σ změna / Σ |změna|. Buňky s indexem pod 0,20 jsou označené jako nestabilní.
+
+Shody na k-té hodnotě součty nemění. Intervaly pocházejí ze stejného pacientského cluster bootstrapu jako primární analýza (B = 2000, seed 20261013).
+
+**C — Robustnost testu tvaru (E3).** Párová změna clr minus hladký trend je algebraicky invariantní vůči normalizaci na 10 mg i vůči centru clr. Obojí přidává konstanty, které pohltí intercept splinu, což je ověřeno i numericky. Šířka binu se proto do E3 promítá jen polohou binů na ose log-intenzity a jejich rozlišením. Testované varianty:
+
+- hladký null s df = 1 (přímka), 2, 4 a 5;
+- fit vážený log-šířkou binu;
+- jednotná mřížka 20 mg (změna rozlišení);
+- ohraničené biny až do 400 mg (změna rozsahu kompozice).
+
+Simulace plasmode srovnává míru falešných poplachů a sílu pro df = 2–5, včetně misspecifikovaného nullu, kde má skutečný hladký profil df = 5.
+
+**D — Liší se tvar změny mezi kontrolami?** U pacientů s M0 a oběma návštěvami se párový rozdíl profilů změny clr hodnotí třemi způsoby: bin po binu s max-t pásem, jako rozdíl lineárního sklonu a 3-df bootstrapovým Waldovým testem, že hladká křivka rozdílu je plochá. P-hodnoty jsou Holm-korigované přes tři páry návštěv. Citlivostní analýza používá společný vzorek pacientů se všemi čtyřmi návštěvami.
+
+**E — Podtypy s výchozí závažností (exploratorně).** Výchozí klinické proměnné pocházejí z `klinicka_data_12102026.xlsx`, který je mimo master dataset. Pro tři předem dané souhrny (ΔT100, sklon clr na úrovni pacienta, ΔIG) se fitují modely změny od M0 s náhodným interceptem, s `návštěva × podtyp` (reference DM) a centrovanou výchozí závažností. Závažnost je ph_VAS na 10 mm (hlavní, podle rozhodnutí týmu) nebo MMT8 na 5 bodů (citlivost). Další varianty přidávají závažnost × návštěva nebo výchozí hodnotu výsledku. Kontrasty mají IS z pacientského cluster bootstrapu (B = 2000); testy věrohodnostním poměrem používají fity ML.
+
+---
+
+# Výsledky — KUMULATIVNÍ prahy
+
+```{r fig_f1c, fig.width=11, fig.height=10}
+show_fig("F1c_E1_cumulative")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- O kolik minut denně víc tráví pacienti při kontrole *nad* každým prahem T ve srovnání s M0, s 95% IS (stínování) a simultánním pásem (tenké čáry).
+- „Nad 100 mg“ odpovídá konvenčnímu prahu GGIR „MVPA“. Toto označení není u myozitid validovanou kategorií střední intenzity.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Zisk je největší u nízkých prahů: nad 40 mg `r ev("E1","cumulative","M3","T40")` min/den v M3. S prahem plynule klesá, protože každý vyšší práh obsahuje méně času.
+- Nad 100 mg je zisk `r ev("E1","cumulative","M3","T100",1,FALSE)` a `r ev("E1","cumulative","M6","T100",1,FALSE)` min/den v M3 a M6 a `r ev("E1","cumulative","M18","T100",1,FALSE)` min/den v M18.
+- Nad 200 mg je to v M3 stále `r ev("E1","cumulative","M3","T200")` min/den.
+
+**Proč je to zajímavé.**
+
+- Zisk nad 100 mg znamená zhruba o třetinu více takového času než na začátku (výchozí medián `r dv("qc_objects","profiles",list(kind="cumulative",visit_code="M0",descriptor="T100"),"median")` min/den).
+- Trvá i v M18, za předpokladu MAR (viz analýza tipping point).
+- Zda je změna této velikosti u IIM klinicky významná, stanoveno není. K tomu by bylo nutné ukotvení k funkci (např. MMT8, FI2, HAQ), což je mimo rozsah tohoto reportu.
+
+</div>
+
+<div class="warning-box">
+
+**Pozor:** Prahy se překrývají: T100 obsahuje vše nad 100 mg včetně času nad 200 mg. Křivka proto neumí říct, *kde* ke změně dochází; na to odpovídají exkluzivní biny níže.
+
+</div>
+
+```{r fig_f2c, fig.width=11, fig.height=10}
+show_fig("F2c_E2_cumulative")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Totéž srovnání na *relativní* škále: čas nad T při kontrole dělený časem nad T v M0 (1 = beze změny). Osa y je logaritmická.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Nad 20 mg je relativní změna malá (`r pct_more("M3","T20")` v M3), protože nad 20 mg je téměř celý bdělý den.
+- Relativní zisk v M3 s prahem roste:
+  - `r pct_more("M3","T100")` nad 100 mg;
+  - `r pct_more("M3","T200")` nad 200 mg;
+  - `r pct_more("M3","T300")` nad 300 mg.
+- Čím intenzivnější pohyb, tím větší *proporcionální* nárůst, i když jde o malý počet minut.
+
+</div>
+
+<div class="note-box">
+
+**Poznámka:** Kumulativní prahy jsou doplňkovou reprezentací a k lokalizaci se nepoužívají.
+
+</div>
+
+# Výsledky — exkluzivní BINY
+
+```{r fig_f1, fig.width=11, fig.height=10}
+show_fig("F1_E1_bins")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Absolutní změnu minut za den strávených *v* každém nepřekrývajícím se binu intenzity, na 10 mg šířky binu.
+- Biny mají šířku 10, 20 nebo 25 mg; hodnoty na 10 mg je činí srovnatelnými.
+- **Jak číst:** odhad 2,5 v 90–100 mg znamená, že pacienti v tomto 10mg úseku intenzity tráví v průměru o 2,5 minuty denně více než na začátku.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- V M3 a M6 jsou bodové odhady absolutního zisku zhruba 1,5–3 min/den na 10 mg od ~40 mg do ~120 mg a k 200 mg slábnou.
+  - 90–100 mg: `r ev("E1","bins","M3","90-100")` v M3 a `r ev("E1","bins","M6","90-100")` v M6.
+- Simultánní pás vylučuje nulu až zhruba od 80–90 mg: `r inner_set("E1","bins","M3")` v M3 a `r inner_set("E1","bins","M6")` v M6.
+- Pod touto hranicí nelze podobně velké zisky odlišit od nuly. Čas v nízké intenzitě kolísá mezi pacienty i u pacienta mnohem víc: bootstrapová SE je zhruba 1,3–1,9 v 40–70 mg oproti zhruba 0,8 v 90–100 mg.
+- Dolní hranice „jistého“ rozsahu tak odráží stejně přesnost jako velikost změny.
+- V M18 jsou bodové odhady v nejnižších binech (20–50 mg) záporné, jejich IS ale obsahují nulu, takže se tam nedá nic uzavřít.
+
+</div>
+
+<div class="warning-box">
+
+**Pozor:** Rozsah 20–50 mg obsahuje v analýze 0–24 h i neklidný spánek a velmi lehký pohyb. Změny v něm nelze vykládat jako změnu určitého typu denní aktivity.
+
+</div>
+
+```{r fig_f2, fig.width=11, fig.height=10}
+show_fig("F2_E2_bins")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Relativní změnu v každém binu: poměr průměrných minut při kontrole a v M0 ze stejného modelu (1 = beze změny).
+- Poslední bod (≥ 400 mg) je čas nad horním okrajem měřené mřížky; tečkovaná čára proto označuje konec měřicí škály.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Pod ~60 mg relativní změna není (poměr ≈ 1).
+- Od ~70 mg poměr s intenzitou roste. V M3:
+  - ×`r ev("E2","bins","M3","100-110",2,FALSE)` v 100–110 mg;
+  - ×`r ev("E2","bins","M3","200-220",2,FALSE)` v 200–220 mg;
+  - ×`r ev("E2","bins","M3","300-325",2,FALSE)` v 300–325 mg.
+- V M6 a M18 jsou poměry ve vysokých intenzitách menší, zhruba ×1,3–1,7.
+- Simultánní pás vylučuje 1 v rozsahu `r inner_set("E2","bins","M6")` v M6 a jen v rozsahu `r inner_set("E2","bins","M18")` v M18.
+- Neexistuje vrchol s následným poklesem, který by vymezoval „optimální pásmo“. Křivka roste a pak se ustálí.
+
+**Proč je to zajímavé.**
+
+- Čas v binech nejvyšší intenzity se při časné kontrole zhruba *zdvojnásobí*, ovšem z velmi nízkého východiska několika minut týdně na bin.
+- Může to odrážet obnovenou schopnost krátkých, náročnějších úseků pohybu. ENMO na zápěstí nebylo u IIM validováno proti typu aktivity, druh aktivity proto nelze pojmenovat.
+- Horní hranici tohoto efektu nelze určit, protože mřížka GGIR končí na 400 mg.
+
+</div>
+
+```{r tab_e1e2}
+if (has("primary_objects")) {
+  primary_objects$summary |>
+    dplyr::filter(estimand %in% c("E1", "E2"), block == "bins") |>
+    dplyr::mutate(est = ifelse(estimand == "E2", exp(estimate), estimate),
+                  lo = ifelse(estimand == "E2", exp(ci_low), ci_low), hi = ifelse(estimand == "E2", exp(ci_high), ci_high)) |>
+    dplyr::transmute(Bin = descriptor, Estimand = estimand, `Návštěva` = visit,
+                     Odhad = fmt(est), `95% IS` = paste0(fmt(lo), " až ", fmt(hi)),
+                     `Simult. pás` = paste0(fmt(ifelse(estimand == "E2", exp(band_low), band_low)), " až ",
+                                            fmt(ifelse(estimand == "E2", exp(band_high), band_high)))) |>
+    kbl_house("E1 (min/den na 10 mg) a E2 (poměr průměrů) pro jednotlivé exkluzivní biny")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Jak číst.**
+
+- Řádky E1 udávají minuty/den na 10 mg, řádky E2 poměr průměrů.
+- „Simult. pás“ je konzervativní interval, který udržuje 95% pokrytí současně přes všechny biny návštěvy. Používejte ho pro tvrzení o tom, *které* biny se změnily.
+
+</div>
+
+
+
+# Informativnost celého spektra
+
+```{r fig_f4, fig.width=11, fig.height=11}
+show_fig("F4_three_dimensions")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Tři vlastnosti každého binu vedle sebe:
+
+- **A:** jak velká je změna;
+- **B:** jak přesně je odhadnuta (bootstrapová směrodatná chyba; menší = přesnější);
+- **C:** kolik procent záznamů obsahuje v daném binu alespoň minimální čas (> 0,25 min/den na 10 mg).
+
+Panel C obsahuje jako referenci i M0.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Přesnost (B) je nejhorší v nejnižších intenzitách, kde je velká variabilita sedavého a lehkého času mezi dny i mezi pacienty, a nad ~150 mg je velmi dobrá.
+- Pokrytí (C) je zhruba 100 % do ~200 mg a pak klesá.
+- Ve vysokých binech je pokrytí při kontrolách soustavně vyšší než na začátku: v 260–280 mg `r dv("qc_objects","coverage",list(kind="bins",visit_code="M0",descriptor="260-280",limit=as.character(0.25)),"pct_above")` % záznamů v M0 oproti `r dv("qc_objects","coverage",list(kind="bins",visit_code="M3",descriptor="260-280",limit=as.character(0.25)),"pct_above")` % v M3.
+
+**Proč je to zajímavé.**
+
+- Větší podíl záznamů z kontrol než z výchozího měření obsahuje měřitelný čas ve vysokých intenzitách. Pokrytí přitom srovnává různé soubory záznamů jednotlivých návštěv, ne tytéž pacienty.
+- Pokrytí i přesnost jsou nejvyšší tam, kde se odehrává většina denního času. To je vlastnost rozdělení času, ne doklad preferovaného pásma intenzity.
+
+</div>
+
+
+```{r fig_f5, fig.width=12, fig.height=6}
+show_fig("F5_confidence_sets")
+```
+
+<div class="note-box">
+
+**Jak číst.**
+
+- **Černé** biny jsou ty, kde je změna kladná *se simultánní 95% jistotou*.
+- **Šedé** biny jsou ty, kde je kladná změna možná, ale neprokázaná.
+- **Bílé** by byly biny, kde nemá oporu ani kladná změna.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Na absolutní škále je změna jistě kladná v rozsahu `r inner_set("E1","bins","M3")` v M3, `r inner_set("E1","bins","M6")` v M6 a `r inner_set("E1","bins","M18")` v M18.
+- Požadavek alespoň +0,5 min/den na 10 mg rozsah zužuje na `r inner_set("E1","bins","M3",0.5)` v M3 a `r inner_set("E1","bins","M6",0.5)` v M6.
+- Tyto rozsahy vymezují, kde je změna *jistě* kladná. Jejich dolní hranice (zhruba 80–90 mg) odráží stejně přesnost jako velikost: pod ní jsou podobně velké zisky odhadnuté příliš nepřesně. Nejde proto o doporučené pásmo.
+
+</div>
+
+
+## Tvar změny (E3) {.unnumbered}
+
+```{r fig_f3, fig.width=14, fig.height=11}
+show_rev("rev_CD_objects", "C1")
+```
+
+<div class="note-box">
+
+**Co ukazuje (výklad revidován, A07-C; čísla beze změny).**
+
+Každý záznam je chápán jako 24h kompozice 21 částí: <20 mg, 19 binů od 20 do 300 mg a ≥300 mg. Pro každou část je *centrovaný log-poměr* (clr) logaritmus jejích minut minus průměrný logaritmus všech 21 částí, tedy její velikost **vůči geometrickému průměru celého dne**. Figura ukazuje průměrnou *párovou změnu* clr od M0 do každé kontroly.
+
+**Panel A — hladká redistribuce.**
+
+- **Body se stínovaným 95% IS:** pozorovaná průměrná změna clr v každém binu.
+- **Tmavá křivka:** hladký trend dané návštěvy, přirozený spline (df 3) v log intenzitě, fitovaný zvlášť pro M3, M6 a M18 se stejnou specifikací.
+- **Kladné hodnoty (šedá oblast):** bin zabírá *větší podíl dne* než v M0, ve srovnání s ostatními částmi. **Záporné hodnoty:** menší podíl.
+- Protože je clr relativní, záporná hodnota *neznamená* méně absolutních minut. Biny 40–70 mg mají zápornou změnu clr, přestože se jejich absolutní minuty téměř nemění (E1); jen rostou méně než zbytek denní aktivity.
+
+**Panel B — lokální odchylky.**
+
+- **Čára:** reziduum, tedy pozorovaná změna clr minus hladký trend.
+- **Kladné reziduum:** bin získal *více*, než hladký trend při jeho intenzitě předpovídá. **Záporné reziduum:** získal méně.
+- **Stínovaný pás:** simultánní 95% pás (max-t přes 19 binů návštěvy; pacientský cluster bootstrap, B = 2000). Kontroluje pravděpodobnost *jakéhokoli* falešného překročení v celém spektru, ne bin po binu.
+- **Kritéria lokální odchylky** (všechna musí platit): ≥ 2 sousední biny s pásem vylučujícím 0; z obou stran ohraničené biny, jejichž pás 0 obsahuje; mimo okraje mřížky; a stejný výsledek při každé hodnotě náhrady nul, při ≥ 5 validních dnech i po vyřazení pacienta s UCTD/SSc.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- **Panel A:** při každé návštěvě křivka plynule stoupá od záporných hodnot (nízké intenzity ztrácejí podíl) ke kladným (vysoké intenzity podíl získávají).
+  - Podíl dne pod 20 mg klesá (změna clr v M3 `r ev("E3_clr","composition","M3","<20",2)`).
+  - Podíl nad 300 mg roste (`r ev("E3_clr","composition","M3",">=300",2)`).
+- **Panel B:** rezidua zůstávají všude uvnitř pásu, lokální hrb tedy neexistuje.
+
+**Proč je to zajímavé.**
+
+- To je ústřední výsledek. V rozlišení testu vypadá zlepšení u IIM jako **„naklopení“ celého profilu aktivity**: biny nízké intenzity ztrácejí relativní podíl a biny vysoké intenzity ho získávají.
+- Žádný rozsah intenzity nad toto hladké naklopení nevystupuje.
+- **Rozlišení testu:** lokální zisky navíc o zhruba +22 % (+0,2 log) v šíři 2–6 binů by byly s velkou pravděpodobností odhaleny. Menší odchylky kolem +10 % mohou uniknout, zejména v M18 (viz tabulka síly ve validační části).
+- Klinicky to hovoří pro popis zotavení měřítky celého profilu spolu s měřítkem objemu, nikoli jediným novým prahem.
+
+</div>
+
+<div class="warning-box">
+
+**Co „žádná lokální odchylka“ *neznamená*.** Nepřítomnost statisticky podloženého hrbu neprokazuje, že by všechny oblasti intenzity byly klinicky stejně informativní. Oblasti se liší tím, kolik minut se mění (E1), relativní změnou (E2), přesností a pokrytím (F4) i tím, jak široce je zisk sdílen (F6). Test tvaru říká jen to, že při tomto rozlišení a velikosti vzorku žádný bin nezískává zřetelně víc nebo méně, než předpovídá hladké naklopení.
+
+</div>
+
+### Je verdikt E3 robustní vůči mřížce binů a specifikaci hladkého nullu? (A07-C) {.unnumbered}
+
+```{r fig_c2, fig.width=13, fig.height=10}
+show_rev("rev_CD_objects", "C2")
+```
+
+```{r tab_variants}
+if (has("rev_CD_objects")) {
+  rev_CD_objects$var_decisions |>
+    dplyr::transmute(Varianta = tr(variant), `Třída` = tr(class), `Návštěva` = visit, Biny = n_bins,
+                     `Kladné hrby` = positive_bumps, `Záporné hrby` = negative_bumps,
+                     `Biny s pásem mimo 0` = n_bins_band_excl0, Verdikt = tr(verdict)) |>
+    kbl_house("Pravidlo hrbu E3 při alternativních hladkých nullech a mřížkách binů (maticový cluster bootstrap, B = 2000)", 0)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- **Proč šířka binu nemůže E3 přímo zkreslit.** Normalizace na 10 mg násobí každý bin konstantou (10 / šířka) a centrum clr je konstantou na záznam. V *párové změně* se obojí odečte nebo ho pohltí intercept splinu. Rezidua jsou proto totožná, ať se použijí minuty, minuty na 10 mg, nebo hodnoty clr; numerický rozdíl je pod 10⁻¹⁵ (validace R5b).
+- **Dvě zbývající cesty, kudy šířka binu působí.** Nestejné šířky ovlivňují (i) kde biny leží na ose log-intenzity, s 10 body v 20–120 mg a 9 v 120–300 mg, a (ii) jak jemně je spektrum rozlišeno.
+- **Varianty, které tyto cesty testují:**
+  - fit, který každý bin váží rozsahem log-intenzity, jejž pokrývá;
+  - jednotná mřížka 20 mg (14 binů);
+  - ohraničené biny až do 400 mg (23 binů).
+
+  Poslední dvě mění rozlišení nebo rozsah, a tedy i estimand; jde o kontroly robustnosti *závěru*, ne téhož čísla.
+- **Pružnost hladkého nullu:** df = 1 (přímka), 2, 4 a 5 vedle primárního df = 3.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- S hladkým nullem df ≥ 3, s vážením šířkou i na obou alternativních mřížkách **není při žádné návštěvě označena lokální odchylka** (`r if (isTRUE(claim_ok("no bump under any df >= 3"))) "ověřeno" else "[ověřit]"`).
+- Něco označí jen dva nejméně pružné nully: *zápornou* oblast v 50–70 mg. Přímka (df 1) ji označí v M6 a M18, df 2 jen v M18.
+  - Jde o zakřivení esovitého profilu z panelu A, které přímka ani spline s df 2 nedokážou sledovat; tento problém byl identifikován už v původním plánu (R1).
+  - Simulace níže ukazuje, že df 2 v právě této situaci zvyšuje falešné poplachy, zejména v M18. Tato označení proto nejsou dokladem lokálního efektu.
+
+</div>
+
+```{r fig_c3, fig.width=13, fig.height=8}
+show_rev("rev_CD_objects", "C3")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Simulace plasmode postavená z vlastních párových změn clr pacientů (500 souborů × 1000 bootstrapových replikací v buňce) odpovídá na tři otázky:
+
+- **Falešné poplachy (vlevo nahoře).** Skutečný populační profil je hladký fit df 3 bez hrbu. Jak často pravidlo něco označí, když test používá df 2–5?
+- **Misspecifikace (uprostřed nahoře).** Totéž, ale skutečný profil je pružnější fit df 5.
+- **Síla (ostatní panely).** Jak často je hrb +10 % nebo +22 % (+0,1 / +0,2 log) vložený do 2 binů (120–160 mg) nebo 6 binů (70–140 mg) detekován na správném místě?
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení — je df = 3 rozumná volba?**
+
+- **Kalibrace.** S df 3 drží pravidlo falešné poplachy hluboko pod 5 %, je-li skutečnost hladká (`r dfsim("null", 3, 3)`). S df 2 stoupají falešné poplachy na `r dfsim("null", 3, 2)`.
+- **Síla.** df 3 odhalí velké hrby (+22 %) téměř vždy, úzké i široké. S df 4–5 začíná spline široké hrby sám pohlcovat: detekce 6binového hrbu +22 % klesá zhruba ze 100 % (df 3) na `r if (has("rev_CD_objects")) { x <- rev_CD_objects$df_sim_summary; x <- x[x$scenario == "6 bins 70-140, +0.2" & x$df_test == 5, ]; paste0(fmt(min(x$pct_detected), 0), "–", fmt(max(x$pct_detected), 0)) } else NA_TXT` % (df 5).
+- **df 4 je věrohodná alternativa.** Pod nullem df 3 je stejně dobře kalibrovaná (≤ 1 % falešných poplachů) a *úzké* malé hrby odhalí častěji než df 3 (2 biny, +10 %: `r dfsim("2 bins 120-160, +0.1", 3, 4, "pct_detected", d = 0)` vs `r dfsim("2 bins 120-160, +0.1", 3, 3, "pct_detected", d = 0)`), široké hrby ale ztrácí.
+- **Simulace df 3 zčásti zvýhodňuje už svou konstrukcí**, protože jejím „skutečným nullem“ je fit df 3. Kdyby byl skutečný hladký profil tak zvlněný jako fit df 5, nebyla by v M6 kalibrovaná ani df 3, ani df 4 (falešné poplachy `r dfsim("null", 5, 3, visits = "M6", d = 0)` u df 3 a `r dfsim("null", 5, 4, visits = "M6", d = 0)` u df 4). Takové falešné poplachy by vytvářely hrby a žádný pozorován nebyl, takže to působí proti pozorovanému závěru, ne v jeho prospěch.
+- **Závěr.** df = 3 zůstává jako předem zvolená volba uzamčeného plánu s rozumnou rovnováhou kalibrace a síly pro úzké i široké hrby; optimalita prokázána není. Věcný výsledek na ní nezávisí: **df 3, 4 i 5 shodně dávají „bez lokální odchylky“** a zakřivení v 50–70 mg označí jen zjevně příliš rigidní nully df 1–2.
+
+</div>
+
+
+```{r tab_decision}
+if (has("sensitivity_objects")) {
+  sensitivity_objects$e3_decisions |>
+    dplyr::transmute(Varianta = tr(variant), `Návštěva` = visit, `Kladné hrby` = positive_bumps, `Záporné hrby` = negative_bumps,
+                     `Lineární sklon (95% IS)` = paste0(fmt(slope), " (", fmt(slope_ci_low), " až ", fmt(slope_ci_high), ")"),
+                     Verdikt = tr(verdict)) |>
+    kbl_house("Rozhodnutí E3 při primární specifikaci a všech variantách invariance")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Verdikt „bez lokální odchylky; hladká redistribuce“ je shodný ve všech variantách:
+  - tři způsoby zacházení s nulovými minutami;
+  - omezení na ≥ 5 validních dnů;
+  - vyřazení pacienta s UCTD/SSc.
+- *Lineární sklon* (jak silně se profil naklápí k vyšším intenzitám) je kladný při každé návštěvě:
+  - největší v M3: `r ev("E3_slope","composition","M3","slope_per_log_mg",2)`;
+  - menší v M6 (`r ev("E3_slope","composition","M6","slope_per_log_mg",2)`) a v M18 (`r ev("E3_slope","composition","M18","slope_per_log_mg",2)`).
+
+</div>
+
+
+## Heterogenita a časování (C1, C3, C5) {.unnumbered}
+
+```{r fig_f6, fig.width=12, fig.height=11}
+show_rev("rev_AB_objects", "B1")
+```
+
+<div class="note-box">
+
+**Co ukazuje (revize, A07-B).** Tři různé otázky držené odděleně; nízké (20–120 mg, vlevo) a vysoké intenzity (120–400 mg, vpravo) mají vlastní osy:
+
+- **A. Pacienti se ziskem:** procento pacientů, jejichž čas v binu vzrostl. 50 % (šedě) by dalo náhodné kolísání nahoru a dolů.
+- **B. Koncentrace kladných zisků:** podíl všech kladných zisků, který připadá na 10 % pacientů s největšími zisky (k = ceiling(0,1 × páry): 5 v M3, 6 v M6, 4 v M18). Šedá čára je podíl, kdyby každý pacient se ziskem získal přesně stejně (zhruba 13–30 %). Jde o **nejmenší možnou hodnotu**, ne o realistický null: reálná data leží vždy nad ní. Informativní je, *o kolik* nad ní leží a jak se to liší mezi intenzitami a návštěvami.
+- **C. Index net/gross:** součet všech změn dělený součtem jejich absolutních hodnot. Hodnoty blízko 0 znamenají, že se zisky a ztráty vyruší; 1 znamená, že se všichni mění stejným směrem.
+
+Top 10 % se vybírá zvlášť v každém binu a návštěvě; stínování = bodový 95% IS z cluster bootstrapu.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- **Kolik pacientů získává.** Od 70 mg výše získává čas v binu `r conc_range("pct_positive", 70, 400)` % pacientů podle binu a návštěvy (např. M3, 260–280 mg: `r conc_ci("M3","260-280","pct_positive")` %). Pod ~60 mg je to zhruba polovina, tedy bez konzistentního směru.
+- **Jak koncentrované jsou zisky.** Od 60 mg výše připadá na top 10 % `r conc_range("share_pos", 60, 400)` % kladných zisků, tj. 2,0–5,1násobek nejmenší možné hodnoty (stejné zisky).
+  - Koncentrace je **podobně velká ve většině spektra** (`r conc_range("share_pos", 60, 200)` % v 60–200 mg napříč návštěvami).
+  - V M3 je **nad ~240 mg numericky vyšší** (`r conc_ci("M3","300-325","share_pos")` % v 300–325 mg); v M6 je kolem 240–260 mg podobná jako v M3; v **M18** zůstává kolem 35 % v celém rozsahu 70–400 mg. Rozdíly mezi návštěvami a intenzitami stojí na překrývajících se bodových intervalech a formálně testovány nebyly. Vynechání jediného pacienta posune podíl v binu ≥ 240 mg až o `r if (has("rev_validation_objects") && !is.null(rev_validation_objects$loo_b2)) fmt(max(rev_validation_objects$loo_b2$max_shift_share_pp), 1) else NA_TXT` procentního bodu (validace R7); tyto hodnoty ve vysokých intenzitách tedy závisejí na jednotlivých pacientech.
+  - Nejvyšší podíly jsou v nejnižších binech (20–40 mg: `r conc_range("share_pos", 20, 40)` %), kde získává jen zhruba polovina pacientů a čistá změna je blízko nuly; tam statistika popisuje šum, ne zlepšení.
+  - Koncentrace v *absolutních minutách* zčásti zrcadlí nerovnoměrnost výchozích hodnot: pacienti, kteří už v dané intenzitě tráví více času, v ní mohou přidat více minut.
+  - Souhrnně za veškerý čas nad 100 mg připadá na top 10 % `r conc_ci("M3","T100","share_pos")` % kladných zisků v M3, `r conc_ci("M6","T100","share_pos")` % v M6 a `r conc_ci("M18","T100","share_pos")` % v M18.
+- **Zisky a ztráty se v nízkých intenzitách vyruší.** Index net/gross je pod ~60 mg blízko 0 (panel C). Proto tam původní „podíl na čistém zisku“ explodoval (viz níže).
+
+**Co se změnilo oproti prvnímu reportu.**
+
+- První report uváděl, že „nad 200 mg přispívá 10 % pacientů s největšími zisky 46–75 % celkového zisku“, a vykládal to jako *menšinu silných responderů* ve vysokých intenzitách. Toto číslo používalo jako jmenovatel čistý zisk. Nad 200 mg je index net/gross 0,49–0,85, takže podíl na čistém zisku je tam jen mírně vyšší než podíl na kladných ziscích; problém čistého estimandu je hlavně v nízkých binech, kde je nedefinovaný nebo přesahuje 100 %.
+- S estimandem kladných zisků připadá na top 10 % zhruba 32–65 % kladných zisků, podobně ve středních i vysokých intenzitách. Data nevyčleňují oblast vysokých intenzit jako nesenou zvláštní menšinou.
+- Revidované čtení: **změna je široká co do směru (většina pacientů nad 70 mg získává) a nerovnoměrná co do velikosti, v podobné míře v celém spektru.**
+
+**Pozor.** Koncentrace zisků popisuje *rozdělení* změny. Není dokladem biologicky odlišné podskupiny responderů: stejný šikmý obraz vzniká ze spojité variability odpovědi a šumu měření a top 10 % nemusí být v různých binech titíž pacienti. Bootstrapové percentilové intervaly pro statistiky „top k“ jsou přibližné; nezávislá oponentura shledala jejich zkreslení malým (průměrně −0,4 procentního bodu).
+
+</div>
+
+```{r fig_f6_orig, fig.width=11, fig.height=7}
+show_rev("rev_AB_objects", "B2")
+```
+
+<div class="warning-box">
+
+**Původní estimand, ponechaný kvůli reprodukovatelnosti.** Podíl top 10 % na *čistém* zisku kohorty (panel B prvního reportu) se reprodukuje přesně. Má dvě vady:
+
+- Při čisté změně ≤ 0 je **nedefinovaný**. Proto křivky začínají na různých intenzitách: chybí M3 20–40 mg a M18 30–60 mg.
+- Když se zisky a ztráty téměř vyruší, **přesahuje 100 %** (až `r if (has("rev_AB_objects")) fmt(max(rev_AB_objects$conc$share_net_orig, na.rm = TRUE), 0) else NA_TXT` % v M6, 30–40 mg). Body označené × mají index net/gross pod 0,20. Tato hranice je pragmatická: podíl na čistém zisku může přesáhnout 100 % vždy, když je index pod 1, takže i hodnoty kolem 100 % v „interpretovatelných“ buňkách (např. 60–80 mg) odrážejí hlavně vyrušení.
+
+Hodnoty nad 100 % nejsou chybou výpočtu: top 10 % získalo víc, než činí čistý zisk celé kohorty, protože jiní pacienti čas ztratili.
+
+</div>
+
+
+```{r tab_c5}
+if (has("descriptive_objects")) {
+  descriptive_objects$c5 |>
+    dplyr::transmute(`Návštěva` = visit, n, `Průměrná ΔIG` = mean_d_ig, `Průměrná Δ průměrného ENMO (mg)` = mean_d_enmo,
+                     `Průměrný sklon clr` = mean_clr_slope, `Spearman sklon vs ΔIG` = spearman_slope_vs_d_ig,
+                     `Spearman sklon vs Δ ENMO` = spearman_slope_vs_d_enmo) |>
+    kbl_house("C5 — Zachycuje změnu hladké naklopení (intenzitní gradient)?")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Zda se „naklopení“ profilu na úrovni pacienta (z E3) pohybuje společně se zavedenými souhrnnými metrikami: změnou intenzitního gradientu (ΔIG) a změnou průměrného zrychlení (Δ průměrného ENMO).
+- Spearmanova korelace 1 by znamenala, že nesou totožnou informaci.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Naklopení koreluje středně s ΔIG (ρ ≈ `r dv("descriptive_objects","c5",list(visit="M6"),"spearman_slope_vs_d_ig",2)` v M6) a slaběji s Δ průměrného ENMO (ρ ≈ `r dv("descriptive_objects","c5",list(visit="M6"),"spearman_slope_vs_d_enmo",2)`).
+- Průměrné ENMO vzrostlo v M6 zhruba o `r dv("descriptive_objects","c5",list(visit="M6"),"mean_d_enmo",1)` mg.
+- Na úrovni skupiny se obě míry rozcházejí: průměrná ΔIG od M3 do M18 *roste* (`r dv("descriptive_objects","c5",list(visit="M3"),"mean_d_ig",3)` → `r dv("descriptive_objects","c5",list(visit="M18"),"mean_d_ig",3)`), zatímco sklon clr *klesá* (`r dv("descriptive_objects","c5",list(visit="M3"),"mean_clr_slope",3)` → `r dv("descriptive_objects","c5",list(visit="M18"),"mean_clr_slope",3)`).
+- Pravděpodobným důvodem je, že GGIR počítá IG přes širší rozsah (0–4000 mg v binech po 25 mg) než tato analýza (20–400 mg).
+
+**Proč je to zajímavé.**
+
+- IG je blízce příbuzný souhrn téhož naklopení bez prahového bodu. Obě veličiny jsou sklonem log času proti log intenzitě, takže určitá korelace je dána konstrukcí.
+- ρ kolem 0,7 znamená, že obě sdílejí jen zhruba polovinu pořadí pacientů a jejich časový průběh se liší.
+- IG je proto rozumný, ale **ne rovnocenný** souhrn.
+- Pro studie u IIM je dobře zdůvodnitelná kombinace měřítka objemu (průměrné ENMO nebo čas nad konvenčním prahem) a IG. Profil spektra je podrobnější deskriptivní doplněk.
+
+</div>
+
+
+```{r tab_c1}
+if (has("descriptive_objects")) {
+  descriptive_objects$c1 |>
+    dplyr::transmute(`Část` = descriptor, `Změna clr M6 − M3` = estimate,
+                     `95% IS` = paste0(fmt(ci_low), " až ", fmt(ci_high)),
+                     `Simult. pás` = paste0(fmt(band_low), " až ", fmt(band_high)), Pacienti = n_patients) |>
+    kbl_house("C1 — Liší se tvar změny mezi M3 a M6 (tíž pacienti)?")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+```{r tab_subtype_summary}
+if (has("descriptive_objects") && !is.null(descriptive_objects$subtype_summary)) {
+  descriptive_objects$subtype_summary |>
+    dplyr::transmute(Podtyp = subtype, `Návštěva` = visit, `Páry` = n_pairs,
+                     `ΔT100 průměr (min/den)` = t100_mean, `ΔT100 medián [IQR]` = paste0(fmt(t100_median, 1), " [", fmt(t100_q25, 1), "; ", fmt(t100_q75, 1), "]"),
+                     `Pacienti se ziskem T100 (%)` = t100_pct_gain,
+                     `Sklon clr průměr` = tilt_mean, `ΔIG průměr` = d_ig_mean) |>
+    kbl_house("Předem dané souhrny podle podtypu (kompletní páry; PM a UCTD/SSc vyřazeni; deskriptivně)")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+```{r fig_f7, fig.width=11, fig.height=10}
+show_fig("F7_subtype_profiles")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Tři předem dané souhrny pro každý podtyp:
+  - změnu času nad 100 mg (průměr, medián s IQR, % pacientů se ziskem);
+  - sklon clr na úrovni pacienta;
+  - změnu IG.
+- F7 ukazuje úplný relativní profil bin po binu pro každý podtyp.
+- Čistě deskriptivně: bez IS a bez testů, 12–18 párů na podtyp a návštěvu.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Souhrny se mezi DM, IMNM a ASyS liší velikostí.
+- V rámci každého podtypu ukazují mediány a IQR velkou individuální variabilitu; malý průměr tedy neznamená, že se žádný pacient nezlepšil.
+
+**Proč je to zajímavé.**
+
+- Rozdíly v obnově denní aktivity mezi podtypy myozitid jsou klinicky věrohodné. Při těchto velikostech vzorků ale může jakýkoli rozdíl vzniknout náhodou, výchozí závažností, délkou nemoci nebo léčbou.
+- Předem specifikovaná analýza podtypů s dostatečnou silou a adjustací na tyto faktory je přirozeným dalším krokem.
+
+</div>
+
+<div class="warning-box">
+
+**Pozor:** Z této tabulky ani figury nelze vyvozovat závěry o efektu podtypu. Jakýkoli jednotlivý bin nebo podtyp vyzdvižený až po pohledu na data by byl post-hoc výběrem.
+
+</div>
+
+### Podtypy s adjustací na výchozí závažnost (A07-E, exploratorně) {.unnumbered}
+
+<div class="note-box">
+
+**Zdroj dat.** Výchozí klinické proměnné nejsou součástí uzamčeného master datasetu. Pocházejí ze souboru `klinicka_data_12102026.xlsx`; jeho md5 je uložen v logu skriptu 09. Napojilo se všech `r if (has("rev_E_objects")) rev_E_objects$linkage$master_patients else NA_TXT` pacientů a kódy podtypů souhlasí u každého pacienta, který má kód v obou zdrojích.
+
+</div>
+
+```{r tab_e_avail}
+if (has("rev_E_objects")) {
+  rev_E_objects$availability |>
+    dplyr::transmute(Podtyp = tr(subtype), Pacienti = patients, `Se záznamem M0` = with_M0_recording,
+                     `S ≥ 1 párem s kontrolou` = with_follow_up_pair, `… a ph_VAS` = pairs_with_ph_vas,
+                     `… a MMT8` = pairs_with_mmt8, `… a FI2` = pairs_with_fi2) |>
+    kbl_house("Dostupnost výchozích ukazatelů závažnosti (M0) u pacientů s párem s kontrolou", 0)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+```{r tab_e_dist}
+if (has("rev_E_objects")) {
+  rev_E_objects$distributions |>
+    dplyr::mutate(dplyr::across(-subtype, \(v) gsub("\\.", ",", v))) |>
+    dplyr::transmute(Podtyp = tr(subtype), `ph_VAS (mm)` = ph_vas, `MDAAT svalová VAS` = muscle_vas,
+                     `Extramuskulární VAS` = extramuscular_vas, `MMT8 (0–80)` = mmt8, FI2 = fi2, HAQ = haq,
+                     `Trvání nemoci (roky)` = disease_duration, `GK (mg/den)` = gc_mg_day) |>
+    kbl_house("Výchozí závažnost podle podtypu: medián [IQR] (n), pacienti s párem s kontrolou")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+```{r tab_e_construct}
+if (has("rev_E_objects")) {
+  rev_E_objects$construct |>
+    dplyr::transmute(Podtyp = subtype, n, `ρ ph_VAS – svalová VAS` = rho_phvas_muscle,
+                     `ρ ph_VAS – extramuskulární VAS` = rho_phvas_extramuscular, `ρ ph_VAS – MMT8` = rho_phvas_mmt8,
+                     `Medián svalové VAS` = median_muscle_vas, `Medián extramuskulární VAS` = median_extramuscular_vas) |>
+    kbl_house("Co ph_VAS měří v jednotlivých podtypech? (Spearmanovy korelace v M0)")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="finding-box">
+
+**Je ph_VAS pro tuto otázku vhodným měřítkem výchozí aktivity nemoci?**
+
+- Lékařovo globální hodnocení aktivity (ph_VAS) shrnuje *veškerou* aktivitu nemoci: svaly, kůži, plíce, klouby i celkové příznaky. Co ho určuje, se mezi podtypy liší:
+  - u **IMNM** je to téměř čistě svalová aktivita (ρ se svalovou VAS `r if (has("rev_E_objects")) fmt(rev_E_objects$construct$rho_phvas_muscle[rev_E_objects$construct$subtype == "IMNM"]) else NA_TXT`; medián extramuskulární VAS ≈ 2 mm);
+  - u **DM** a **ASyS** je z podstatné části určené extramuskulární aktivitou (ρ s extramuskulární VAS `r if (has("rev_E_objects")) paste(fmt(rev_E_objects$construct$rho_phvas_extramuscular[rev_E_objects$construct$subtype %in% c("DM","ASyS")]), collapse = " a ") else NA_TXT` oproti `r if (has("rev_E_objects")) paste(fmt(rev_E_objects$construct$rho_phvas_muscle[rev_E_objects$construct$subtype %in% c("DM","ASyS")]), collapse = " a ") else NA_TXT` se svalovou VAS; n = 14–18) a se svalovou silou prakticky nesouvisí (ρ s MMT8 ≈ 0).
+- Stejná hodnota ph_VAS proto znamená u DM/ASyS **menší svalové postižení než u IMNM**. Jako adjustace na to, „jak omezená byla na začátku pacientova mobilita“, je ph_VAS nedokonalé, a to v různých podtypech různě. MMT8 je přímější měřítko svalového postižení, a proto slouží jako citlivostní analýza.
+- **Kolinearita.** ph_VAS se mezi podtypy téměř neliší (R² na podtyp `r if (has("rev_E_objects")) fmt(rev_E_objects$vif_sev$r2_on_subtype[1], 2) else NA_TXT`, VIF `r if (has("rev_E_objects")) fmt(rev_E_objects$vif_sev$vif[1], 2) else NA_TXT`). MMT8 je u IMNM nižší (R² `r if (has("rev_E_objects")) fmt(rev_E_objects$vif_sev$r2_on_subtype[2], 2) else NA_TXT`, VIF `r if (has("rev_E_objects")) fmt(rev_E_objects$vif_sev$vif[2], 2) else NA_TXT`). MMT8 a FI2 spolu silně korelují (ρ = `r if (has("rev_E_objects")) fmt(rev_E_objects$collinearity$fi2[rev_E_objects$collinearity$variable == "mmt8"]) else NA_TXT` v analyzovaném vzorku), proto se FI2 do modelů s MMT8 nepřidává; FI2 má navíc nejvíc chybějících hodnot.
+
+</div>
+
+```{r fig_e1, fig.width=14, fig.height=11}
+show_rev("rev_E_objects", "E1")
+```
+
+```{r tab_e_lrt}
+if (has("rev_E_objects")) {
+  rev_E_objects$lrt |>
+    dplyr::transmute(`Výsledek` = tr(c(dT100 = "ΔT100", tilt = "sklon clr", dIG = "ΔIG")[outcome]),
+                     `Závažnost` = ifelse(severity == "ph_vas", "ph_VAS", "MMT8"), Test = tr(test),
+                     `χ²` = chisq, df, p, Pacienti = n_patients, `Pozorování` = n_obs) |>
+    kbl_house("Testy věrohodnostním poměrem (ML, náhodný intercept; exploratorně, bez korekce na multiplicitu)", 3)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Modely změny od M0 v M3, M6 a M18 pro tři předem dané souhrny; žádný jednotlivý bin se nevybírá:
+  - ΔT100 (min/den nad 100 mg);
+  - sklon clr na úrovni pacienta (souhrn „tvaru“);
+  - ΔIG (změna intenzitního gradientu).
+- Referencí je DM. Kontrasty se vyhodnocují při průměrné závažnosti, pro každou návštěvu i v průměru přes návštěvy („průměr M3–M18“), s 95% IS z pacientského cluster bootstrapu (B = 2000).
+- Jak číst řádky figury:
+  - **řádek 1:** bez adjustace, všichni pacienti s podtypem;
+  - **řádek 2:** bez adjustace, jen pacienti s ph_VAS. Srovnání řádků 1 a 2 ukazuje, co udělá samotné *omezení vzorku*;
+  - **řádky 3–5:** adjustace na ph_VAS; + ph_VAS × návštěva; + výchozí hodnota výsledku;
+  - **řádek 6:** adjustace na MMT8 místo ph_VAS.
+- Zhruba 12–18 pacientů na podtyp a návštěvu.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení (exploratorně).**
+
+- **ΔT100 — IMNM získává méně času nad 100 mg než DM.** V průměru přes návštěvy je rozdíl bez adjustace `r ev_rev("dT100","E_a_unadjusted","none","all subtype patients","mean M3-M18","IMNM - DM",1)` min/den.
+  - Omezení vzorku ani adjustace na ph_VAS ho prakticky nemění: `r ev_rev("dT100","E_b_sev","ph_vas","complete ph_vas","mean M3-M18","IMNM - DM",1)`. Globální test jakéhokoli efektu podtypu dává p = `r lrt_p("dT100","ph_vas","any subtype effect (main + interaction)")`.
+  - Ve vzorku s MMT8 je bodový odhad bez adjustace (`r ev_rev("dT100","E_a_unadjusted","mmt8","complete mmt8","mean M3-M18","IMNM - DM",1)`) a s adjustací na MMT8 (`r ev_rev("dT100","E_b_sev","mmt8","complete mmt8","mean M3-M18","IMNM - DM",1)`) téměř stejný; interval se rozšíří přes 0 a globální test podtypu dává p = `r lrt_p("dT100","mmt8","any subtype effect (main + interaction)")`. MMT8 samo se změnou T100 nesouvisí (test věrohodnostním poměrem p = `r lrt_p("dT100","mmt8","severity main effect", 2)`).
+  - Data tedy **neukazují**, že by menší zisk u IMNM vysvětlovala výchozí svalová slabost; kontrast adjustovaný na MMT8 je jen méně přesný. ASyS a DM se neliší.
+- **Tvar změny (sklon) a ΔIG — doklad rozdílu mezi podtypy chybí, intervaly jsou široké** (např. sklon IMNM − DM `r ev_rev("tilt","E_b_sev","ph_vas","complete ph_vas","mean M3-M18","IMNM - DM")`). U všech pacientů bez adjustace získává ASyS o něco méně IG než IMNM (`r ev_rev("dIG","E_a_unadjusted","none","all subtype patients","mean M3-M18","ASyS - IMNM",3)`); už omezení na vzorek s ph_VAS posune interval přes 0 a adjustace rozdíl dál zmenší. Interakce podtyp × návštěva není přítomna u žádného výsledku (všechna p > 0,05).
+- **Výchozí závažnost a tvar změny.** Pacienti s vyšším výchozím ph_VAS mají *větší* naklopení k vyšším intenzitám. U MMT8 ukazuje souvislost stejným směrem (slabší svaly → větší ΔIG; test věrohodnostním poměrem p < 0,05), bootstrapový interval ale obsahuje 0:
+  - sklon na 10 mm ph_VAS: `r ev_rev("tilt","E_b_sev","ph_vas","complete ph_vas","all","severity (per unit)")`;
+  - ΔIG na 10 mm ph_VAS: `r ev_rev("dIG","E_b_sev","ph_vas","complete ph_vas","all","severity (per unit)",3)`;
+  - ΔIG na 5 bodů MMT8: `r ev_rev("dIG","E_b_sev","mmt8","complete mmt8","all","severity (per unit)",3)`.
+
+  To je slučitelné s větším prostorem ke zlepšení nebo s regresí k průměru. U ΔIG souvislost po přidání výchozího IG slábne. Interakci závažnost × návštěva data nepodporují.
+
+**Jak s tím naložit.**
+
+- Jde o odhady generující hypotézy: tři výsledky, dvě měřítka závažnosti a několik modelů, bez korekce na multiplicitu a s 12–18 pacienty v buňce.
+- Testy věrohodnostním poměrem s fity ML na zhruba 47 pacientech jsou poněkud antikonzervativní; kde se rozcházejí s bootstrapovými intervaly (např. MMT8 → ΔIG), je opatrnějším vodítkem bootstrap. V modelu E_c se koeficient závažnosti vztahuje k M3 (referenční návštěva členu závažnost × návštěva).
+- Jediným signálem, který stojí za ověření v nezávislé kohortě, je rozdíl IMNM vs DM v *objemu* (ΔT100), ideálně s výchozí svalovou silou předem specifikovanou jako kovariáta. Trvání nemoci a dávka glukokortikoidů jsou uvedeny, ale kvůli riziku přeučení nejsou modelovány.
+- Nic z toho neidentifikuje biologicky odlišnou podskupinu responderů.
+
+</div>
+
+
+### Liší se tvar změny mezi kontrolami? (A07-D) {.unnumbered}
+
+Tabulku C1 výše (M6 − M3, bin po binu, původní analýza) kód revize přesně reprodukuje (validace R9b). Revize doplňuje formální párová srovnání pro všechny tři páry návštěv.
+
+```{r fig_d1, fig.width=15, fig.height=10}
+show_rev("rev_CD_objects", "D1")
+```
+
+```{r tab_shape}
+if (has("rev_CD_objects")) {
+  rev_CD_objects$shape_summary |>
+    dplyr::transmute(Kontrast = tr(contrast), Vzorek = tr(sample), Pacienti = n_patients,
+                     `Rozdíl sklonu (95% IS)` = paste0(fmt(slope_diff), " (", fmt(slope_ci_low), " až ", fmt(slope_ci_high), ")"),
+                     `p sklonu (Holm)` = paste0(fmt(slope_p_boot, 3), " (", fmt(slope_p_holm, 3), ")"),
+                     `Wald hladké křivky (3 df)` = fmt(wald_3df, 1),
+                     `p hladké křivky, bootstrap (Holm)` = paste0(fmt(p_wald_boot, 3), " (", fmt(p_wald_boot_holm, 3), ")"),
+                     `Biny mimo simult. pás` = n_bins_band_excl0) |>
+    kbl_house("Párové srovnání tvaru změny mezi kontrolami (cluster bootstrap, B = 2000)")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- **Panel A (jen deskriptivně):** tři hladké trendy jednotlivých návštěv z F3 přes sebe. Vycházejí z různých souborů pacientů (`r if (has("rev_CD_objects")) paste(c("M3","M6","M18"), sapply(c("M3","M6","M18"), \(v) unique(rev_CD_objects$smooth_curves$n_pairs[rev_CD_objects$smooth_curves$visit == v])), sep = " n = ", collapse = "; ") else NA_TXT` párů), takže vizuální rozdíly mohou odrážet, kdo na návštěvu přišel, stejně jako to, jak se změnil.
+- **Panel B a tabulka:** formální test. U týchž pacientů (M0 plus obě návštěvy) se rozdíl změny clr „pozdější minus dřívější“ analyzuje třemi způsoby:
+  - bin po binu se simultánním pásem;
+  - jako rozdíl lineárního *sklonu*;
+  - 3-df testem, že hladká křivka rozdílu je plochá, tj. že *tvar* v rozsahu 20–300 mg je stejný až na konstantní posun (konstantní posun, odrážející výměnu s částmi <20 a ≥300 mg, se záměrně netestuje).
+- P-hodnoty jsou Holm-korigované přes tři páry. Citlivostní analýza vše opakuje u `r if (has("rev_CD_objects")) rev_CD_objects$n_all4 else NA_TXT` pacientů se všemi čtyřmi návštěvami.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- **Panel A vypadá mezi návštěvami odlišně:**
+  - M3 je téměř přímé naklopení, které stoupá až k 300 mg;
+  - M6 a M18 se nad ~175 mg ohýbají a zplošťují.
+- **Formální testy po korekci na multiplicitu rozdíl nepotvrzují:**
+  - **Sklon:** žádný pár návštěv se neliší (M6 − M3: `r shape_v("M6 minus M3","slope_diff")`, 95% IS `r shape_v("M6 minus M3","slope_ci_low")` až `r shape_v("M6 minus M3","slope_ci_high")`; všechna p po Holmovi ≥ `r if (has("rev_CD_objects")) fmt(min(rev_CD_objects$shape_summary$slope_p_holm[grepl("^all", rev_CD_objects$shape_summary$sample)]), 2) else NA_TXT`).
+  - **Celkový tvar:** M6 vs M3 ukazuje nominální rozdíl zakřivení (p = `r shape_v("M6 minus M3","p_wald_boot",3)`, Holm `r shape_v("M6 minus M3","p_wald_boot_holm",3)`; ve společném vzorku p = `r shape_v("M6 minus M3","p_wald_boot",3,"common")`, Holm `r shape_v("M6 minus M3","p_wald_boot_holm",3,"common")`, tedy hraničně). M18 vs M3 dává p = `r shape_v("M18 minus M3","p_wald_boot",3)` (Holm `r shape_v("M18 minus M3","p_wald_boot_holm",3)`) a M18 vs M6 rozdíl neukazuje (p = `r shape_v("M18 minus M6","p_wald_boot",3)`).
+  - **Bin po binu:** v žádném srovnání neleží žádný bin mimo simultánní pás.
+- **Závěr.** Plošší konec vysokých intenzit v M6/M18 oproti M3 je **deskriptivní vzorec slučitelný s časným „výbuchem“, který se ustálí**, ne statisticky podložený rozdíl mezi fázemi zotavení. Bodové odhady M18 − M3 v rozsahu 250–300 mg (−0,2 až −0,3) jsou velké, ale nepřesné (34 pacientů).
+
+</div>
+
+```{r tab_timing}
+if (has("rev_CD_objects")) {
+  rev_CD_objects$timing |>
+    dplyr::transmute(Kontrast = tr(contrast), Pacienti = n_patients,
+                     `Dřívější návštěva: měsíce od M0, medián (rozsah)` = paste0(fmt(months_a_median, 1), " (", gsub("\\.", ",", months_a_range), ")"),
+                     `Pozdější návštěva: měsíce od M0, medián (rozsah)` = paste0(fmt(months_b_median, 1), " (", gsub("\\.", ",", months_b_range), ")"),
+                     `Odstup, medián (měsíce)` = fmt(gap_months_median, 1),
+                     `Stejná sezóna, dřívější vs pozdější (%)` = fmt(pct_same_season_a_b, 0),
+                     `Stejná sezóna jako M0, dřívější (%)` = fmt(pct_same_season_M0_a, 0),
+                     `Stejná sezóna jako M0, pozdější (%)` = fmt(pct_same_season_M0_b, 0)) |>
+    kbl_house("Časování a sezóna srovnávaných návštěv")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="warning-box">
+
+**Proč nelze rozdíly mezi návštěvami oddělit od ročního období a časování.**
+
+- **Sezóna.** Téměř žádný pacient není v M0 a při kterékoli kontrole zaznamenán ve stejné sezóně: v M6 a M18 0 %, v M3 několik procent. Srovnání M3 → M6 téměř vždy překračuje sezónu (`r if (has("rev_CD_objects")) fmt(rev_CD_objects$timing$pct_same_season_a_b[1], 0) else NA_TXT` % ve stejné sezóně), zatímco M6 a M18 spadají do stejné sezóny u `r if (has("rev_CD_objects")) fmt(rev_CD_objects$timing$pct_same_season_a_b[3], 0) else NA_TXT` % pacientů. Sezóna je tedy s návštěvou svázaná už designem a v kontrastech tvaru ji nelze adjustovat.
+- **Časování.** M3 (2–6 měsíců) a M6 (5–9 měsíců) se ve skutečném čase od výchozího měření překrývají. „M3 vs M6“ znamená *časná vs pozdější kontrola*, ne přesné časové body.
+- **Kdo přišel.** Páry se liší tím, kdo je v nich zahrnut; společný vzorek dává podobný, o něco silnější, ale po Holmovi stále nevýznamný signál M6 vs M3. Pacienti bez M0 jsou vyřazeni kvůli konzistenci s E3, přestože se M0 v rozdílu návštěv odečte.
+
+</div>
+
+
+---
+
+# Robustnost, výsledky validace a záznam problémů {.tabset}
+
+## Citlivostní analýzy {.unnumbered}
+
+```{r tab_sens}
+if (has("sensitivity_objects")) {
+  sensitivity_objects$compare_summary |>
+    dplyr::transmute(Estimand = estimand, Blok = tr(block), `Citlivostní analýza` = tr(sensitivity), n,
+                     `Stejné znaménko jako primární (%)` = pct_same_sign, `Uvnitř primárního 95% IS (%)` = pct_within_primary_ci) |>
+    kbl_house("Shoda citlivostních analýz s primárními odhady E1/E2", 1)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Při alternativních analýzách si odhady zachovávají směr v 94–100 % binů a ve 100 % binů zůstávají uvnitř primárního 95% IS. Alternativami jsou: jen kompletní páry, jednodušší model s náhodným interceptem, ≥ 5 validních dnů a vyřazení pacienta s UCTD/SSc.
+- **Hlavní výsledky jsou při těchto analytických volbách konzistentní.** Setrvání uvnitř primárního IS je slabý doklad, protože všechny varianty sdílejí většinu dat.
+
+</div>
+
+
+```{r tab_anchor}
+if (has("sensitivity_objects")) {
+  sensitivity_objects$s5_anchor |>
+    dplyr::transmute(Blok = tr(block), Deskriptor = descriptor, `Pozorování` = n_obs, Pacienti = n_patients,
+                     `Pozorované měsíce` = months_observed, `LR χ²` = LR_chisq, `LR df` = LR_df, `LR p` = LR_p,
+                     `β sin` = sin_beta, `β cos` = cos_beta) |>
+    kbl_house("Kotevní test sezónnosti (společný 2-df LRT ročních harmonických, opravený)", 3)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Test, zda roční období (roční sinusový/kosinusový cyklus) vysvětluje část úrovně aktivity. Provádí se pro čas nad 100 mg a pro bin 100–110 mg.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Doklad sezónního efektu není (p ≈ `r dv("sensitivity_objects","s5_anchor",list(descriptor="T100"),"LR_p",2)`). Modely adjustované na sezónu daly prakticky stejné efekty návštěv.
+- Dříve prázdný list sezónnosti v A04/A07 způsobovala chyba v kódu, která je nyní opravena.
+
+</div>
+
+<div class="warning-box">
+
+**Pozor:** Návštěvy jsou svázané s kalendářem: žádný pár M0→M6 nespadá do stejné sezóny. Sezónní efekty a efekty léčby proto nelze plně oddělit a nulový výsledek sezónního testu nevylučuje mírný příspěvek sezóny.
+
+</div>
+
+
+```{r tab_tipping}
+if (has("sensitivity_objects")) {
+  sensitivity_objects$s9 |> dplyr::filter(block == "bins") |> dplyr::distinct(descriptor, n_with_m0, n_m18_imputed, tipping_delta) |>
+    dplyr::mutate(tipping_ci = vapply(descriptor, \(d) as.numeric(tip_lo("bins", d, raw = TRUE)), numeric(1))) |>
+    dplyr::transmute(Bin = descriptor, `Pacienti s M0` = n_with_m0, `Imputované M18` = n_m18_imputed,
+                     `δ: bodový odhad → 0` = tipping_delta, `δ: dolní mez 95% IS → 0` = tipping_ci) |>
+    kbl_house("S9 — O kolik horší by musely být chybějící hodnoty M18, aby zisk M0→M18 zmizel?")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Zhruba 4 z 10 pacientů s výchozím měřením nemají záznam M18.
+- Tipping point udává, o kolik *horší* by jejich nepozorované hodnoty M18 musely být oproti modelové predikci, aby zisk M0→M18 zmizel.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Aby *bodový odhad* dosáhl nuly, museli by chybějící pacienti ztratit zhruba 1,6násobek toho, co pozorovaní pacienti získali. Tento poměr je dán podílem chybějících M18 (24 z 63), sám o sobě tedy informativní není.
+- Relevantnější otázkou je, kdy zisk v M18 přestane být *statisticky podložený*, tedy kdy dolní mez 95% IS dosáhne nuly.
+  - Pro 90–100 mg k tomu dojde už při posunu zhruba `r tip_lo("bins","90-100")` min/den na 10 mg u chybějících pacientů.
+  - Pro čas nad 100 mg zhruba při `r tip_lo("cumulative","T100")` min/den.
+- To jsou mírné posuny. Možnými důvody horšího výsledku u nedostavivších se pacientů jsou relaps, hospitalizace nebo progrese ILD, takže **výsledek M18 je citlivý na věrohodné odchylky od MAR**. Důvody vynechaných návštěv je třeba sbírat.
+
+</div>
+
+
+## Validace (PASS/WARN/FAIL) {.unnumbered}
+
+```{r tab_val}
+if (has("validation_objects")) {
+  validation_objects$validation_table |> dplyr::transmute(ID = id, Kontrola = tr(check), Stav = status, `Detail (technický výpis)` = detail) |>
+    kbl_house("Výsledky validačního plánu")
+} else cat("*Tabulka není k dispozici — spusťte 06_VALIDATION_BOTH.R.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Automatické kontroly výpočtů:
+
+- aritmetické identity;
+- reprodukovatelnost (stejný výsledek na 1 i na mnoha jádrech CPU);
+- konvergenci modelů (všechny modely konvergovaly);
+- rozdělení reziduí;
+- vliv jednotlivých pacientů.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- Všechny technické kontroly prošly.
+- Rezidua jsou šikmá (WARN), což se u minut za den očekává. Proto všechny intervaly spolehlivosti pocházejí z pacientského bootstrapu, ne z modelových vzorců.
+- Žádný jednotlivý pacient neposune žádný odhad o víc než zhruba jednu směrodatnou chybu.
+
+</div>
+
+
+```{r tab_power}
+if (has("validation_objects")) {
+  validation_objects$power_summary |>
+    dplyr::transmute(`Scénář` = tr(scenario), `Návštěva` = visit, Simulace = n_sim,
+                     `Označen jakýkoli hrb (%)` = pct_any_bump, `Vložený hrb detekován (%)` = pct_detected) |>
+    kbl_house("Síla pravidla hrbu E3 v plasmode (hrb vložený při kontrole)", 0)
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Simulaci, která odpovídá na otázku: *kdyby existovalo zvláštní pásmo intenzity, našli bychom ho, a jak často pravidlo vyhlásí falešný poplach?*
+- **Skutečný null:** párová změna každého pacienta byla upravena tak, aby populace měla pozorované hladké naklopení, ale žádnou lokální odchylku. Pacienti se pak převzorkovali a použilo se rozhodovací pravidlo.
+- **Scénáře s hrbem:** do 2, 3, 4 nebo 6 sousedních binů bylo přidáno navíc +10 % nebo +22 % (+0,1 / +0,2 log). Hrb se počítá jako detekovaný, jen když se označená oblast překrývá s vloženými biny.
+- Pro každé procento jsou uvedeny 95% intervaly Monte Carlo.
+
+</div>
+
+<div class="finding-box">
+
+**Hodnocení.**
+
+- **Falešné poplachy při skutečném nullu:** `r null_txt()`. Kalibrované pravidlo je drží na nominálních 5 % nebo pod nimi.
+- **Velké odchylky (+22 %) se odhalí spolehlivě**, úzké i široké:
+  - 2 biny v 120–160 mg: `r pow_range("2 bins 120-160, +0.2")` %;
+  - 3 biny v 180–240 mg: `r pow_range("3 bins 180-240, +0.2")` %;
+  - 4 biny v 80–120 mg: `r pow_range("4 bins 80-120, +0.2")` %;
+  - 6 binů v 70–140 mg: `r pow_range("6 bins 70-140, +0.2")` %.
+- **Malé odchylky (+10 %) se odhalí méně spolehlivě**, nejméně v M18 (n = 39):
+  - 2 biny: `r pow_range("2 bins 120-160, +0.1")` %;
+  - 4 biny: `r pow_range("4 bins 80-120, +0.1")` %;
+  - 6 binů: `r pow_range("6 bins 70-140, +0.1")` %.
+  - U širokých malých hrbů část odchylky pohltí hladký null.
+- **Pravidlo nepředetekuje**: falešné poplachy zůstaly na nominálních 5 % nebo pod nimi i v M18 (n = 39). To kalibruje pravidlo hrbu; samo o sobě to neověřuje pokrytí každého jednotlivého simultánního pásu.
+- **Závěr k rozsahu:** nepřítomnost lokálního pásma je dobře podložená pro odchylky zhruba +22 % a větší. Odchylky kolem +10 %, zejména široké nebo v M18, vyloučit nelze a při označení mohou být chybně lokalizovány: u 6binového hrbu +10 % byl *nějaký* hrb označen častěji, než se označení překrývalo s vloženými biny.
+
+</div>
+
+
+## Validace revize A07 {.unnumbered}
+
+```{r tab_val_rev}
+if (has("rev_validation_objects")) {
+  rev_validation_objects$validation_table |> dplyr::transmute(ID = id, Kontrola = tr(check), Stav = status, `Detail (technický výpis)` = detail) |>
+    kbl_house("Validace revize A07 (10_REV_VALIDATION_BOTH.R)")
+} else cat("*Tabulka není k dispozici — spusťte 10_REV_VALIDATION_BOTH.R.*\n")
+```
+
+```{r tab_claims}
+if (has("rev_validation_objects")) {
+  rev_validation_objects$claims |> dplyr::transmute(`Tvrzení` = tr(claim), `Platí ve výsledcích` = ifelse(holds, "ano", "ne")) |>
+    kbl_house("Tvrzení v tomto reportu automaticky ověřená proti výsledkům")
+} else cat("*Tabulka není k dispozici.*\n")
+```
+
+<div class="note-box">
+
+**Co ukazuje.**
+
+- Nezávislý přepočet nových čísel samostatným kódem v base R: podíly top 10 %, simultánní pásy z uložených bootstrapových replikací a uzavření clr.
+- Reprodukci všech nezměněných primárních a deskriptivních čísel.
+- Velikosti vzorků srovnané s původním výstupem; identifikátory pacientů se neukládají.
+- Vliv vynechání jednoho pacienta na nové estimandy (včetně binů ≥ 240 mg) a diagnostiku fitů modelů podtypů.
+- Shodu figur, tabulek a tvrzení použitých v textu.
+
+WARN označuje výsledek, který je třeba mít na paměti, ne chybu výpočtu. Jediný WARN (R7: podíl top 10 % v binech ≥ 240 mg se při vynechání jednoho pacienta posune až o ~11 procentních bodů) je rozebrán v textu u F6 a v `docs/261016_A07_validation_change_log_summary.md`.
+
+</div>
+
+## Záznam problémů {.unnumbered}
+
+```{r tab_issues}
+tibble::tribble(
+  ~ID, ~`Pozorování`, ~`Závažnost`, ~`Příčina`, ~Test, ~Oprava, ~Dopad,
+  "K1", "Dřívější tvrzení: vrchol M3 ve vysokých intenzitách je artefakt SD", "kritická (vědecká)", "poloha maxim závisí na škále", "profily relativní (E2), dz (E4), clr (E3)", "tvrzení staženo; estimandy zvoleny a priori", "revidována interpretace H1",
+  "K2", "Revidovaný R00 natvrdo používá cestu R:/ a ignoruje MYOII_MASTER_RDS", "kritická (reprodukovatelnost)", "regrese v revidovaném helperu", "revize kódu", "nová konfigurace s pořadím hledání + proměnnou prostředí", "staré R05/R06 nepřenositelné",
+  "K3", "List season_anchor_test prázdný v A04/A07", "vysoká", "sloupec anova.merMod je Df, ne `Chi Df`", "kontrola xlsx + kódu", "opraveno v season_anchor_test()", "test sezónnosti nyní k dispozici (S5)",
+  "V1", "Výsledky bootstrapu závisí na počtu workerů (R03/R06)", "vysoká", "clusterSetRNGStream + parLapply", "1 vs N workerů", "výběry generovány předem v hlavním procesu", "výsledky přenositelné mezi stroji",
+  "V2", "Bootstrap v R05 po návštěvě × binu, ne po pacientovi přes spektrum", "vysoká", "převzorkování v group_modify", "revize kódu", "jeden výběr pro všechny biny/návštěvy", "simultánní pásy nyní platné",
+  "MO2", "Absolutní vrchol v 120–140 mg je artefakt šířky binu", "závažná", "biny 10/20/25 mg", "normalizace na 10 mg", "E1 na 10 mg (v A07 i popisný profil)", "absolutní vrchol 90–100 mg",
+  "MO4", "Nuly soustředěné v M0 v 375–400 mg (14 %)", "závažná", "řídký chvost", "tabulky nul podle návštěvy", "≥ 300 mg sloučeno pro E3; mřížka náhrad", "chvost E3 stabilní",
+  "MO5", "Výpadek do M18 závislý na trajektorii", "závažná", "observační sledování", "S10", "MMRM (MAR) primárně; tipping point S9", "M18 interpretováno s výhradou",
+  "R1", "Lineární null vytváří rezidua tvaru U", "závažná", "esovitý profil změny", "znaménka pozorovaných reziduí", "null z přirozeného splinu, pravidlo hrbu", "žádné falešné okrajové „intervaly“",
+  "MO9", "Značky L/R zápěstí se u 10 pacientů liší", "info", "značky v názvech souborů (přístroj podle uživatele vždy na nedominantní ruce)", "parsování názvů souborů", "žádná (zdokumentováno)", "žádný očekávaný",
+  "R3-5", "„Null“ plasmode převzorkoval pozorovaná data (ne skutečný null); malé N_SIM/B_SIM", "závažná", "design simulace", "plasmode se skutečným nullem, N_SIM 500 × B_SIM 1000, MC IS", "V7 přepsáno (maticový výpočet)", "chyba I. druhu nyní odhadnutelná",
+  "R3-6", "Null s df = 3 může pohlcovat široké hrby; detekce porovnávala řetězce hran", "závažná", "rozlišení hladkého nullu", "scénáře se 4 a 6 biny; detekce podle překryvu", "rozšířeny scénáře V7 (v A07 i plasmode pro df)", "závěr E3 omezen na testované rozlišení",
+  "R3-7", "Tipping point E/p je mechanická identita", "závažná", "definice na bodovém odhadu", "algebra", "reportovat δ, při které dolní mez 95% IS dosáhne 0", "robustnost M18 přeformulována",
+  "R3-11", "Zvýraznění jednoho binu u IMNM bylo post hoc", "závažná", "výběr z 23 × 3 × 3 buněk", "–", "předem dané souhrny podtypů (T100, sklon, dIG) + úplné profily; v A07 adjustované modely", "text o podtypech přeformulován"
+) |> kbl_house("Záznam problémů (audit → oprava → dopad)")
+```
+
+<div class="note-box">
+
+**Co ukazuje.** Každý problém nalezený v dřívějších analýzách (A04/A07, R01–R06) s jeho příčinou, opravou a dopadem na závěry.
+
+**Nejdůležitější pro interpretaci.** V dřívějších analýzách závisela poloha maxima na škále (jednotky SD, minuty, poměry). Relativní odpověď ve vysokých intenzitách je reálná, ale v absolutních minutách malá; po revizi A07 je její koncentrace mezi pacienty podobná jako ve středních intenzitách (viz F6). Analýza nyní reportuje absolutní, relativní a tvarové estimandy odděleně.
+
+</div>
+
+
+---
+
+# Biologická a klinická interpretace
+
+<div class="warning-box">
+
+**Pozor:** ENMO v mg není metabolická intenzita (MET) a označení „MVPA“ v GGIR neznamená validované kategorie intenzity pro tuto populaci.
+
+- Změny času v binech popisují, *kde na škále zrychlení* denní pohyb přibyl.
+- Neukazují, *proč* přibyl: klinická odpověď, sezóna, nebo chování.
+
+</div>
+
+Testovatelné hypotézy (exploratorní; k ověření v nezávislých datech):
+
+1. **H1:** Zlepšení u IIM se projevuje hlavně jako **hladké naklopení** denního rozdělení intenzit k vyšším zrychlením, ne jako zisk v jednom konkrétním pásmu intenzity. Malé (~10 %) lokální odchylky tato data vyloučit nedokážou.
+2. **H2:** Absolutní minuty přibývají hlavně ve středním pásmu, kde leží většina denního aktivního času. Relativní zisky jsou největší ve vysokých intenzitách, tam ale činí zlomky minuty denně.
+3. **H3 (revidováno):** Zisky jsou široké co do směru, ale nerovnoměrné co do velikosti, a to v podobné míře ve středních i vysokých intenzitách (top 10 % ≈ třetina až dvě třetiny kladných zisků). Případná silnější koncentrace časného (M3) zisku ve vysokých intenzitách není formálně podložená. Popisuje to rozdělení změny, ne odlišnou podskupinu responderů.
+4. **H4 (revidováno):** Časná odpověď (M3) může být strmějším, lineárnějším naklopením, které se do M6/M18 ve vysokých intenzitách zploští. Deskriptivně je to vidět, párové testy to ale po korekci na multiplicitu nepodporují. Je potřeba to prospektivně otestovat s kontrolou časování návštěv a sezóny.
+5. **H5 (nová, exploratorní):** Pacienti s IMNM získávají zpět menší *objem* aktivity (čas nad 100 mg) než pacienti s DM; zda k tomu přispívá výchozí svalová slabost, nelze z těchto dat rozhodnout. Rozdíl v *tvaru* zotavení mezi podtypy zjištěn nebyl (široké intervaly) a vyšší výchozí ph_VAS jde ruku v ruce s větším naklopením.
+
+---
+
+# Limitace
+
+1. **Chybějící data a selekce.**
+   - Sledování je neúplné a výpadek souvisí s trajektorií.
+   - MMRM (MAR) a analýza tipping point to zmírňují, ale MNAR vyloučit nemohou.
+   - Důvody chybění nejsou k dispozici.
+2. **Chybí reliabilita u jednotlivce.**
+   - Přesnost na úrovni skupiny (bootstrapová SE) není test-retest reliabilita.
+   - Nejmenší detekovatelná změna pro bin vyžaduje denní data GGIR.
+3. **Pevná, nepravidelná mřížka prahů GGIR s horním okrajem 400 mg.**
+   - Oblasti nelze rozlišit jemněji než nativními biny (10–25 mg).
+   - Horní hranice relativní změny ve vysokých intenzitách je mřížkou cenzurovaná.
+   - Sezóna je strukturálně svázaná s časováním návštěv, což omezuje sezónní adjustaci.
+4. **Rozlišení testu tvaru.**
+   - Lokální odchylky zhruba +22 % (2–6 binů) by byly s velkou pravděpodobností odhaleny.
+   - Odchylky kolem +10 % mohly uniknout, zejména široké a v M18 (viz simulace síly).
+   - Pravidlo hrbu je kalibrované, pokud skutečný hladký profil není pružnější než fitovaný null; zvlněnější skutečnost vede k falešným poplachům (ve scénáři df 5 až ~20 % v M6), které ale pozorovány nebyly (A07-C).
+5. **Analýzy podtypů (A07-E).**
+   - Klinické kovariáty pocházejí ze souboru mimo uzamčený master dataset; ph_VAS u části pacientů chybí, nejčastěji u ASyS.
+   - ph_VAS měří v různých podtypech různé věci; MMT8 má strop 80.
+   - Malé buňky, několik výsledků a modelů, bez korekce na multiplicitu; léčba a trvání nemoci nebyly modelovány.
+
+<div class="todo-box">
+
+**TODO:** Vyžádat GGIR `part2_daysummary*.csv` a `config.csv`. Jsou potřeba pro modul reliability a pro dokumentaci kritérií validních dnů.
+
+</div>
+
+---
+
+# Závěry, další výzkumné otázky a reprodukovatelnost
+
+```{r concl, results='asis'}
+if (has("sensitivity_objects")) {
+  fv <- sensitivity_objects$final_verdict
+  cat("**Závěr pro jednotlivé návštěvy (předem stanovené pravidlo):**\n\n")
+  for (i in seq_len(nrow(fv))) cat(sprintf("- %s: %s\n", fv$visit[i], tr(fv$final[i])))
+} else cat("*Závěry se generují z analytických objektů — nejdřív spusťte skripty.*\n")
+```
+
+**Další otázky** (bez výslovného souhlasu se neimplementují):
+
+- souvislost změny spektra se *změnou* MMT8 / FI2 / HAQ (ukotvení klinicky významné změny);
+- rozdíl v objemu mezi IMNM a DM a role výchozí svalové síly v nezávislé nebo větší kohortě;
+- reliabilita (ICC / SEM / SDC) z denních dat GGIR. Denní tabulka (`d11_part2daysummary`) se zřejmě nachází v `data/260123_backup.RData` a je třeba ji ověřit;
+- důvody vynechaných návštěv M18 jako podklad pro citlivostní analýzu MNAR.
+
+**Reprodukovatelnost.** Spusťte skripty ve `working/` v pořadí 01 → 10 (07–10 = revize A07; skript 09 potřebuje `klinicka_data_12102026.xlsx`, hledaný přes `MYOII_CLINICAL_XLSX`, `working/data/` nebo `data/threshold/`) a pak vyrenderujte tento report (viz `README.md` §9). Vše se načítá z master RDS, jehož cesta a md5 jsou uvedeny níže. Počet bootstrapových replikací B, seed a počet workerů jsou uloženy spolu s výsledky.
+
+```{r repro}
+if (has("primary_objects")) {
+  tibble::tibble(`Položka` = c("Master RDS", "md5", "Master vytvořil", "Bootstrap B", "Seed", "Workery", "Neúspěšné replikace"),
+                 Hodnota = c(primary_objects$input$path, primary_objects$input$md5, primary_objects$input$master,
+                             primary_objects$boot_settings$B, primary_objects$boot_settings$seed,
+                             primary_objects$boot_settings$workers, primary_objects$boot_settings$n_failed_replicates)) |>
+    kbl_house("Metadata běhu")
+} else cat("*Metadata běhu nejsou k dispozici.*\n")
+```
+
+# Vědecké shrnutí revize
+
+**Co revidované analýzy prokazují**
+
+1. Denní profil intenzity ENMO u IIM s intenzitou plynule a monotónně klesá. Dřívější zdánlivý vrchol v 120–140 mg byl artefaktem šířky binu, a to jen v popisné figuře; primární estimand E1 byl normalizovaný už dříve.
+2. Zlepšení je širokým, hladkým naklopením 24h kompozice intenzit k vyšším zrychlením. Tento závěr je robustní vůči:
+   - způsobu reprezentace šířky binu (estimand tvaru je vůči ní algebraicky invariantní);
+   - mřížce (jednotná 20 mg, až do 400 mg);
+   - specifikaci hladkého nullu (df 3, 4 a 5, vážení šířkou).
+3. Většina pacientů získává čas nad ~70 mg, velikost zisku je ale nerovnoměrná, a to v podobné míře ve středních i vysokých intenzitách. Na 10 % pacientů připadá zhruba třetina až dvě třetiny všech kladných zisků.
+
+**Co zůstává nejisté**
+
+1. Zda se časné (M3) a pozdější (M6/M18) zotavení liší tvarem. Vzorec je vidět, ale není statisticky podložený, a návštěva, sezóna a účast jsou designem provázané.
+2. Zda existují lokální odchylky menší než zhruba +10 % (omezená síla, zejména v M18).
+3. Rozdíly mezi podtypy. IMNM ukazuje menší objemový zisk, vzorky jsou ale malé, analýza je exploratorní, odhad adjustovaný na MMT8 je nepřesný a léčba ani trvání nemoci nebyly modelovány.
+4. Výsledky M18 závisejí na předpokladu, že výpadek je MAR.
+
+**Na co může navázat klinicky orientovaná studie**
+
+- Ukotvit změnu spektra změnami MMT8, FI2, HAQ a výsledků hlášených pacienty a definovat klinicky významnou změnu.
+- Předem specifikovaně otestovat, zda IMNM při stejné výchozí svalové síle získává zpět menší objem aktivity než DM.
+- Odhadnout reliabilitu u jednotlivce z denních dat GGIR.
+- Sbírat důvody vynechaných návštěv a plánovat návštěvy tak, aby se oddělila sezóna od doby sledování.
+
+# Literatura
+
+Bibliografické údaje níže pocházejí ze seznamu nezávislého oponenta nebo z dřívějších materiálů. Položky označené *(ověřit)* je nutné před odesláním zkontrolovat v PubMedu nebo u vydavatele.
+
+1. Rowlands AV, Edwardson CL, Davies MJ, et al. Beyond cut points: accelerometer metrics that capture the physical activity profile. *Med Sci Sports Exerc* 2018;50:1323–1332. doi:10.1249/MSS.0000000000001561.
+2. Rowlands AV, Dawkins NP, Maylor B, et al. Enhancing the value of accelerometer-assessed physical activity: meaningful visual comparisons of data-driven translational accelerometer metrics. *Sports Med Open* 2019;5:47. doi:10.1186/s40798-019-0225-9 *(ověřit)*.
+3. Migueles JH, Rowlands AV, Huber F, Sabia S, van Hees VT. GGIR: a research community-driven open source R package for generating physical activity and sleep outcomes from multi-day raw accelerometer data. *J Meas Phys Behav* 2019;2:188–196. doi:10.1123/jmpb.2018-0063.
+4. Hildebrand M, van Hees VT, Hansen BH, Ekelund U. Age group comparability of raw accelerometer output from wrist- and hip-worn monitors. *Med Sci Sports Exerc* 2014;46:1816–1824. doi:10.1249/MSS.0000000000000289.
+5. Chastin SFM, Palarea-Albaladejo J, Dontje ML, Skelton DA. Combined effects of time spent in physical activity, sedentary behaviors and sleep on obesity and cardio-metabolic health markers: a novel compositional data analysis approach. *PLoS One* 2015;10:e0139984. doi:10.1371/journal.pone.0139984.
+6. Dumuid D, Stanford TE, Martín-Fernández JA, et al. Compositional data analysis for physical activity, sedentary time and sleep research. *Stat Methods Med Res* 2018;27:3726–3738. doi:10.1177/0962280217710835 *(ověřit)*.
+7. Sommerfeld M, Sain S, Schwartzman A. Confidence regions for spatial excursion sets from repeated random field observations. *J Am Stat Assoc* 2018;113:1327–1340. doi:10.1080/01621459.2017.1341838 *(ověřit)*.
+8. Westfall PH, Young SS. *Resampling-Based Multiple Testing*. Wiley; 1993.
+9. Field CA, Welsh AH. Bootstrapping clustered data. *J R Stat Soc B* 2007;69:369–390. doi:10.1111/j.1467-9868.2007.00593.x *(ověřit)*.
+10. Brooks ME, Kristensen K, van Benthem KJ, et al. glmmTMB balances speed and flexibility among packages for zero-inflated generalized linear mixed modeling. *R Journal* 2017;9:378–400. doi:10.32614/RJ-2017-066.
+11. Mallinckrodt CH, et al. Recommendations for the primary analysis of continuous endpoints in longitudinal clinical trials. *Drug Inf J* 2008;42:303–319 *(ověřit)*.
+
+---
+
+# Informace o sezení
+
+<details>
+
+<summary>Platforma</summary>
+
+```{r session_info_1}
+df_session_platform <- sessioninfo::session_info()$platform |>
+  unlist() |>
+  tibble::enframe(
+    name = "Nastavení",
+    value = "Hodnota"
+  )
+
+knitr::kable(
+  df_session_platform,
+  booktabs = TRUE,
+  align = "l",
+  caption = "Prostředí R"
+) |>
+  kableExtra::kable_styling(
+    full_width = FALSE,
+    latex_options = "hold_position",
+    bootstrap_options = c("striped", "hover", "condensed", "responsive")
+  )
+```
+
+</details>
+
+<details>
+
+<summary>Použité balíčky</summary>
+
+```{r session_info_2}
+session_pkgs <- sessioninfo::package_info() |>
+  tibble::tibble() |>
+  subset(select = c(package, loadedversion, date, attached)) |>
+  (\(df) df[order(df$package), ])()
+
+knitr::kable(session_pkgs, booktabs = TRUE, row.names = FALSE)
+```
+
+</details>
+
+<br> <br> <br> <br> <br> <br>
+
+::: {.tocify-extend-page data-unique="tocify-extend-page" style="height: 0;"}
+:::

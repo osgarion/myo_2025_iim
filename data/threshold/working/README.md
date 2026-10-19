@@ -152,3 +152,22 @@ Výstupy **neobsahují řádky ani identifikátory pacientů** (jen agregované 
 - Čáry návštěv ve figurách: **M0** čerchovaná, **M3** tečkovaná, **M6** přerušovaná, **M18** plná (vhodné pro ČB tisk).
 - Subtypy (jen pro deskriptivní analýzu podtypů): 0 + 4 = DM, 2 + 3 = IMNM, 5 = ASyS. PM (1) a UCTD/SSc jsou vyřazeni z analýz podtypů, v hlavních analýzách zůstávají.
 - „MVPA“ v názvech GGIR proměnných je historické označení, nikoli validovaná kategorie intenzity.
+
+---
+
+## 9. Revize A07 (2026-10-16)
+
+Podklad: `../MYO_A07_narhy_na_zmeny.txt`. Původní skripty 01–06 a report `261013_*` zůstávají beze změny. Revize je ve verzovaných souborech:
+
+| Soubor | Obsah |
+|---|---|
+| `R/06_helpers_revision.R` | funkce revize (A–E) |
+| `07_REV_A_B_profile_concentration_BINS.R` | A: profil na 10 mg; B: koncentrace zisků (top 10 % kladných zisků, net/gross, původní estimand) |
+| `08_REV_C_D_E3_shape_BOTH.R` | C: invariance a varianty E3, plasmode volby df; D: párové srovnání tvaru M3/M6/M18 |
+| `09_REV_E_subtypes_clinical.R` | E: podtypy s adjustací na ph_VAS / MMT8 (exploratorní) |
+| `10_REV_VALIDATION_BOTH.R` | validace R1–R10 |
+| `reports/261016_thresholds_report_v2.Rmd` | revidovaný report (anglicky) |
+| `reports/261016_thresholds_report_v2_cz.Rmd` | revidovaný report v češtině (stejné výsledky; překlad popisků figur a tabulek v reportu, desetinná čárka) |
+| `docs/261016_A07_*.md` | kritické review, validace + change log + shrnutí, nezávislá oponentura |
+
+**Klinický soubor** `klinicka_data_12102026.xlsx` (jen pro 09) se hledá v pořadí: `Sys.setenv(MYOII_CLINICAL_XLSX = "...")` → `working/data/` → nadřazená složka (`data/threshold/`). Do výstupů jdou jen agregované hodnoty. Navíc je potřeba balíček `readxl`.
