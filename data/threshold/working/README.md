@@ -15,22 +15,31 @@
 ```
 working/
 ├── README.md                     ← tento soubor
-├── run_all.R                     ← spustí 01 → 06 a vyrenderuje report
+├── SKRIPTY_A_FUNKCE_CZ.md        ← přehled skriptů (účel, vstupy, výstupy, doba) a katalog všech funkcí
+├── run_all.R                     ← spustí 01 → 10 a vyrenderuje všechny tři reporty
 ├── 01_QC_data_dictionary_BOTH.R  ← datový slovník, QC (PASS/WARN/FAIL), flow, deskripce
 ├── 02_PRIMARY_bootstrap_BOTH.R   ← E1–E4 + cluster bootstrap (B = 2000), pásy, rozhodnutí
 ├── 03_SENSITIVITY_BOTH.R         ← S1–S10 + invariance rozhodovacího pravidla
 ├── 04_DESCRIPTIVE_heterogeneity_BINS.R ← C1, C3, C5, podtypy, M30–M60
 ├── 05_FIGURES_TABLES_BOTH.R      ← publikační figury + legendy
 ├── 06_VALIDATION_BOTH.R          ← testy, diagnostika, simulace síly, issue log
+├── 07_REV_A_B_profile_concentration_BINS.R ← revize A07: A profil na 10 mg, B koncentrace zisků
+├── 08_REV_C_D_E3_shape_BOTH.R    ← revize A07: C varianty a invariance E3, D tvar změny M3/M6/M18
+├── 09_REV_E_subtypes_clinical.R  ← revize A07: E podtypy + klinická závažnost (exploratorní)
+├── 10_REV_VALIDATION_BOTH.R      ← validace revize R1–R10
 ├── R/                            ← sdílené funkce (pouze source, nespouštět samostatně)
-│   ├── 00_config.R               ← cesty, balíčky, konstanty (B, seed, workery, subtypy)
+│   ├── 00_config.R               ← cesty, balíčky, konstanty (B, seed, workery, subtypy), save_public()
 │   ├── 01_helpers_data.R         ← načtení masteru, QC, analytické tabulky, výstupy
 │   ├── 02_helpers_bootstrap.R    ← pacientský cluster bootstrap (checkpointy), max-t pásy
 │   ├── 03_helpers_estimands.R    ← estimandy E1–E4, rozhodovací pravidlo
-│   └── 04_helpers_sensitivity.R  ← modely citlivostních analýz
+│   ├── 04_helpers_sensitivity.R  ← modely citlivostních analýz
+│   ├── 05_helpers_e3fast.R       ← maticový výpočet E3 (bootstrap pás, plasmode type-I / síla)
+│   └── 06_helpers_revision.R     ← funkce revize A07 (A–E)
 ├── reports/
-│   ├── 261013_thresholds_report.Rmd  ← report (jen načítá výsledky, nic nepočítá)
-│   └── fonts_header.tex              ← fonty pro PDF výstup
+│   ├── 261013_thresholds_report.Rmd      ← report v1 (jen načítá výsledky, nic nepočítá)
+│   ├── 261016_thresholds_report_v2.Rmd   ← revidovaný report (EN)
+│   ├── 261016_thresholds_report_v2_cz.Rmd ← revidovaný report (CZ)
+│   └── fonts_header.tex                  ← fonty pro PDF výstup
 ├── docs/                         ← audit trail (audit, oponentura, vypořádání, slovník)
 └── output/                       ← generováno skripty (RData, tables, figures, logs)
 ```
